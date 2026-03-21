@@ -2,22 +2,103 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import axios from 'axios'
 
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function getRiskScore(result, confidence) {
+  if (['Phishing', 'Spam/Phishing', 'Fake'].includes(result)) return confidence
+  return Math.max(0, 100 - confidence)
+}
+
+function getIndicators(result, activeTab, input) {
+  const indicators = []
+  const text = (input || '').toLowerCase()
+  const isThreat = ['Phishing', 'Spam/Phishing', 'Fake'].includes(result)
+
+  if (activeTab === 'url') {
+    const url = text
+    if (isThreat) {
+      if (/\d{1,3}(\.\d{1,3}){3}/.test(url))       indicators.push('IP Address URL')
+      if (url.split('.').length > 5)                 indicators.push('Excessive Subdomains')
+      if (['tk','ml','cf','gq','xyz'].some(t => url.endsWith('.'+t))) indicators.push('Suspicious TLD')
+      if (url.includes('@'))                         indicators.push('@ Symbol in URL')
+      if (!url.startsWith('https'))                  indicators.push('No HTTPS')
+      const brands = ['google','facebook','amazon','paypal','microsoft','apple','instagram']
+      const domain = url.replace(/https?:\/\/(www\.)?/, '').split('/')[0]
+      if (brands.some(b => url.includes(b) && !domain.startsWith(b))) indicators.push('Brand Impersonation')
+      if (indicators.length === 0)                   indicators.push('Suspicious Pattern')
+    }
+  } else if (activeTab === 'email' || activeTab === 'scam') {
+    if (isThreat) {
+      if (/urgent|immediately|act now|limited time/i.test(text)) indicators.push('Urgency Language')
+      if (/click here|verify account|confirm your/i.test(text))  indicators.push('Social Engineering')
+      if (/\$\d+|free money|prize|winner/i.test(text))           indicators.push('Financial Lure')
+      if (/@gmail|@yahoo|@hotmail/i.test(text))                  indicators.push('Non-Corporate Sender')
+      if (/password|ssn|credit card|bank account/i.test(text))   indicators.push('Credential Harvesting')
+      if (indicators.length === 0)                                indicators.push('Suspicious Content')
+    }
+  } else if (activeTab === 'job') {
+    if (isThreat) {
+      if (/fee|registration|deposit|pay upfront/i.test(text))    indicators.push('Upfront Fee Required')
+      if (/whatsapp|telegram/i.test(text))                       indicators.push('Unofficial Contact Channel')
+      if (/guaranteed|no experience|work from home.{0,20}earn/i.test(text)) indicators.push('Unrealistic Promises')
+      if (/@gmail|@yahoo/i.test(text))                           indicators.push('Non-Corporate Email')
+      if (/aadhar|pan card|passport copy/i.test(text))           indicators.push('Sensitive Data Request')
+      if (indicators.length === 0)                                indicators.push('Suspicious Job Pattern')
+    }
+  }
+  return indicators
+}
+
+function getSecurityAnalysis(result, confidence, activeTab) {
+  const isThreat = ['Phishing', 'Spam/Phishing', 'Fake'].includes(result)
+  const riskScore = getRiskScore(result, confidence)
+
+  if (!isThreat) {
+    return [
+      { icon: '✅', text: 'No malicious patterns detected.', badge: 'SAFE', badgeClass: 'badge-safe' },
+      { icon: '🔒', text: 'Content appears legitimate and trustworthy.', badge: 'LOW', badgeClass: 'badge-low' },
+    ]
+  }
+
+  const analyses = []
+
+  if (riskScore >= 80) {
+    analyses.push({ icon: '🚨', text: 'High-confidence threat detected. Do not interact with this content.', badge: 'CRITICAL', badgeClass: 'badge-critical' })
+  } else if (riskScore >= 50) {
+    analyses.push({ icon: '⚠️', text: 'Some suspicious patterns found. Exercise caution.', badge: 'MEDIUM', badgeClass: 'badge-medium' })
+  } else {
+    analyses.push({ icon: '🔍', text: 'Minor anomalies detected. Verify before proceeding.', badge: 'LOW', badgeClass: 'badge-low' })
+  }
+
+  const tips = {
+    url:   'Do not enter credentials on this site. Verify the domain manually.',
+    email: 'Do not click any links or download attachments from this email.',
+    scam:  'Do not respond or share personal information with this sender.',
+    job:   'Do not pay any fees or share sensitive documents with this employer.',
+  }
+  analyses.push({ icon: '🔎', text: tips[activeTab] || 'Verify the source independently before taking any action.', badge: 'LOW', badgeClass: 'badge-low' })
+
+  return analyses
+}
+
+// ── component ─────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
   const { user, logout } = useAuth()
-  const [activeTab, setActiveTab] = useState('url')
-  const [urlInput, setUrlInput] = useState('')
+  const [activeTab, setActiveTab]   = useState('url')
+  const [urlInput, setUrlInput]     = useState('')
   const [emailInput, setEmailInput] = useState('')
-  const [scamInput, setScamInput] = useState('')
-  const [jobInput, setJobInput] = useState('')
-  const [result, setResult] = useState(null)
-  const [analyzing, setAnalyzing] = useState(false)
+  const [scamInput, setScamInput]   = useState('')
+  const [jobInput, setJobInput]     = useState('')
+  const [result, setResult]         = useState(null)
+  const [analyzing, setAnalyzing]   = useState(false)
 
   useEffect(() => {
     const particles = []
     for (let i = 0; i < 40; i++) {
       const p = document.createElement('div')
       p.className = 'particle'
-      const size = Math.random() * 3 + 1
+      const size  = Math.random() * 3 + 1
       const color = Math.random() > 0.5 ? '#00d4ff' : '#7b2fff'
       p.style.cssText = `left:${Math.random()*100}%;width:${size}px;height:${size}px;background:${color};box-shadow:0 0 ${size*2}px ${color};animation-duration:${Math.random()*14+8}s;animation-delay:-${Math.random()*14}s;`
       document.body.appendChild(p)
@@ -26,13 +107,15 @@ export default function Dashboard() {
     return () => particles.forEach(p => p.remove())
   }, [])
 
+  const currentInput = { url: urlInput, email: emailInput, scam: scamInput, job: jobInput }[activeTab]
+
   const analyzeContent = async (type) => {
-    const inputs = { url: urlInput, email: emailInput, scam: scamInput, job: jobInput }
+    const inputs    = { url: urlInput, email: emailInput, scam: scamInput, job: jobInput }
     const endpoints = {
-      url: 'http://localhost:5000/api/predict-url',
+      url:   'http://localhost:5000/api/predict-url',
       email: 'http://localhost:5000/api/predict-email',
-      scam: 'http://localhost:5000/api/predict-scam',
-      job: 'http://localhost:5000/api/predict-job'
+      scam:  'http://localhost:5000/api/predict-scam',
+      job:   'http://localhost:5000/api/predict-job',
     }
     const value = inputs[type]
     if (!value.trim()) return
@@ -40,19 +123,35 @@ export default function Dashboard() {
     setResult(null)
     try {
       const token = localStorage.getItem('token')
-      const body = type === 'url' ? { url: value } : { text: value }
-      const res = await axios.post(endpoints[type], body, {
-        headers: { Authorization: `Bearer ${token}` }
+      const body  = type === 'url' ? { url: value } : { text: value }
+      const res   = await axios.post(endpoints[type], body, {
+        headers: { Authorization: `Bearer ${token}` },
       })
-      setResult(res.data)
+      setResult({ ...res.data, inputSnapshot: value })
     } catch {
-      setResult({ result: 'Error', confidence: 0 })
+      setResult({ result: 'Error', confidence: 0, inputSnapshot: value })
     } finally {
       setAnalyzing(false)
     }
   }
 
-  const isThreat = result && ['Phishing', 'Spam/Phishing', 'Fake'].includes(result.result)
+  const isThreat  = result && ['Phishing', 'Spam/Phishing', 'Fake'].includes(result.result)
+  const riskScore = result ? getRiskScore(result.result, result.confidence) : 0
+  const indicators = result ? getIndicators(result.result, activeTab, result.inputSnapshot) : []
+  const secAnalysis = result ? getSecurityAnalysis(result.result, result.confidence, activeTab) : []
+
+  const barColor =
+    riskScore >= 80 ? '#ff4444' :
+    riskScore >= 50 ? '#ffaa00' : '#00ff88'
+
+  const statusLabel =
+    !result ? '' :
+    riskScore >= 80 ? 'DANGEROUS' :
+    riskScore >= 50 ? 'SUSPICIOUS' : 'SAFE'
+
+  const statusClass =
+    riskScore >= 80 ? 'status-danger' :
+    riskScore >= 50 ? 'status-warn'   : 'status-safe'
 
   return (
     <>
@@ -169,8 +268,8 @@ export default function Dashboard() {
             <span className="step-num" style={{ color: 'rgba(123,104,238,0.1)' }}>02</span>
             <span className="card-icon-lg">🖥️</span>
             <h3>AI Analysis</h3>
-            <p>Our ML models analyze 50+ features including patterns, keywords and domain info.</p>
-            <div className="card-tag purple"><span className="dot-sm purple" />Deep learning models</div>
+            <p>Our ML models analyze patterns, structures and known threat signatures.</p>
+            <div className="card-tag purple"><span className="dot-sm purple" />Deep learning</div>
           </div>
           <div className="glass-card step-card">
             <span className="step-num" style={{ color: 'rgba(0,255,136,0.1)' }}>03</span>
@@ -197,18 +296,20 @@ export default function Dashboard() {
                 className={`tab ${activeTab === type ? 'active' : ''}`}
                 onClick={() => { setActiveTab(type); setResult(null) }}
               >
-                {type === 'url' && '🔗 URL Check'}
+                {type === 'url'   && '🔗 URL Check'}
                 {type === 'email' && '📧 Email Check'}
-                {type === 'scam' && '⚠️ Scam Message'}
-                {type === 'job' && '💼 Job Posting'}
+                {type === 'scam'  && '⚠️ Scam Message'}
+                {type === 'job'   && '💼 Job Posting'}
               </button>
             ))}
           </div>
 
+          {/* URL tab */}
           <div className={`tab-panel ${activeTab === 'url' ? 'active' : ''}`}>
             <p className="input-label">Enter suspicious URL to analyze</p>
             <input type="text" className="cyber-input" value={urlInput}
               onChange={e => setUrlInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && analyzeContent('url')}
               placeholder="https://suspicious-site.com/login" />
             <button className="glow-btn large" style={{ marginTop: '16px' }}
               onClick={() => analyzeContent('url')}>
@@ -216,6 +317,7 @@ export default function Dashboard() {
             </button>
           </div>
 
+          {/* Email tab */}
           <div className={`tab-panel ${activeTab === 'email' ? 'active' : ''}`}>
             <p className="input-label">Paste suspicious email content below</p>
             <textarea className="cyber-textarea" value={emailInput}
@@ -227,6 +329,7 @@ export default function Dashboard() {
             </button>
           </div>
 
+          {/* Scam tab */}
           <div className={`tab-panel ${activeTab === 'scam' ? 'active' : ''}`}>
             <p className="input-label">Paste suspicious message below</p>
             <textarea className="cyber-textarea" value={scamInput}
@@ -238,6 +341,7 @@ export default function Dashboard() {
             </button>
           </div>
 
+          {/* Job tab */}
           <div className={`tab-panel ${activeTab === 'job' ? 'active' : ''}`}>
             <p className="input-label">Paste job posting description below</p>
             <textarea className="cyber-textarea" value={jobInput}
@@ -249,6 +353,7 @@ export default function Dashboard() {
             </button>
           </div>
 
+          {/* ── RESULT PANEL ─────────────────────────────────────────────── */}
           {(analyzing || result) && (
             <div className="result-box">
               {analyzing && (
@@ -257,22 +362,98 @@ export default function Dashboard() {
                   <span>Analyzing with AI...</span>
                 </div>
               )}
-              {result && !analyzing && (
-                isThreat ? (
-                  <div className="res-threat">
-                    <div className="res-icon">⚠️</div>
-                    <div className="res-title threat">THREAT DETECTED</div>
-                    <div className="res-type threat">{result.result}</div>
-                    <div className="res-conf">Confidence: {result.confidence}%</div>
+
+              {result && !analyzing && result.result !== 'Error' && (
+                <div className={`res-detailed ${isThreat ? 'res-detailed--threat' : 'res-detailed--safe'}`}>
+
+                  {/* ── Header row: status + risk score ── */}
+                  <div className="res-header-row">
+                    <div className="res-status-block">
+                      <span className={`res-status-icon ${isThreat ? 'threat-icon' : 'safe-icon'}`}>
+                        {isThreat ? '⚠️' : '✅'}
+                      </span>
+                      <div>
+                        <div className={`res-status-label ${statusClass}`}>
+                          {isThreat ? (activeTab === 'job' ? 'FAKE JOB DETECTED' : 'SUSPICIOUS ACTIVITY') : 'SAFE'}
+                        </div>
+                        <div className="res-status-sub">
+                          {isThreat
+                            ? 'Potential threat indicators detected — proceed with caution'
+                            : `${result.result} — no threats found`}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="res-score-block">
+                      <span className={`res-score-num ${statusClass}`}>{riskScore}%</span>
+                      <span className="res-score-lbl">RISK SCORE</span>
+                    </div>
                   </div>
-                ) : (
-                  <div className="res-safe">
-                    <div className="res-icon">✅</div>
-                    <div className="res-title safe">SAFE</div>
-                    <div className="res-type safe">{result.result}</div>
-                    <div className="res-conf">Confidence: {result.confidence}%</div>
+
+                  {/* ── Phishing probability bar ── */}
+                  <div className="res-bar-section">
+                    <div className="res-bar-label-row">
+                      <span className="res-bar-title">
+                        {activeTab === 'url'   && 'PHISHING PROBABILITY'}
+                        {activeTab === 'email' && 'SPAM PROBABILITY'}
+                        {activeTab === 'scam'  && 'SCAM PROBABILITY'}
+                        {activeTab === 'job'   && 'FAKE JOB PROBABILITY'}
+                      </span>
+                      <span className="res-bar-pct" style={{ color: barColor }}>{riskScore}%</span>
+                    </div>
+                    <div className="res-bar-track">
+                      <div
+                        className="res-bar-fill"
+                        style={{ width: `${riskScore}%`, background: barColor, boxShadow: `0 0 8px ${barColor}` }}
+                      />
+                    </div>
+                    <div className="res-bar-legend">
+                      <span style={{ color: '#00ff88' }}>SAFE</span>
+                      <span style={{ color: '#ffaa00' }}>SUSPICIOUS</span>
+                      <span style={{ color: '#ff4444' }}>DANGEROUS</span>
+                    </div>
                   </div>
-                )
+
+                  {/* ── Detected Indicators (only if threat) ── */}
+                  {isThreat && indicators.length > 0 && (
+                    <div className="res-indicators-section">
+                      <div className="res-section-title">DETECTED INDICATORS</div>
+                      <div className="res-indicators-list">
+                        {indicators.map((ind, i) => (
+                          <span key={i} className="res-indicator-tag">
+                            ⚠️ {ind}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Security Analysis ── */}
+                  <div className="res-analysis-section">
+                    <div className="res-section-title">SECURITY ANALYSIS</div>
+                    <div className="res-analysis-list">
+                      {secAnalysis.map((item, i) => (
+                        <div key={i} className="res-analysis-item">
+                          <span className="res-analysis-icon">{item.icon}</span>
+                          <span className="res-analysis-text">{item.text}</span>
+                          <span className={`res-badge ${item.badgeClass}`}>{item.badge}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ── Confidence footer ── */}
+                  <div className="res-conf-footer">
+                    Model confidence: <strong style={{ color: '#00d4ff' }}>{result.confidence}%</strong>
+                  </div>
+                </div>
+              )}
+
+              {result && !analyzing && result.result === 'Error' && (
+                <div className="res-threat" style={{ textAlign: 'center' }}>
+                  <div className="res-icon">❌</div>
+                  <div className="res-title threat">Analysis Failed</div>
+                  <div className="res-conf">Could not reach the server. Please try again.</div>
+                </div>
               )}
             </div>
           )}

@@ -18,6 +18,9 @@ export default function LandingPage() {
 
   return (
     <>
+      <style>
+        {`.corner { display: none; }`}
+      </style>
       <div className="corner corner-tl" />
       <div className="corner corner-tr" />
       <div className="corner corner-bl" />

@@ -139,8 +139,8 @@ def predict_job():
     has_pay_fee = 1 if any(w in text for w in ["fee","registration","deposit","pay"]) else 0
     has_unrealistic = 1 if any(w in text for w in ["100000","50000","lakh","crore"]) else 0
     has_suspicious = 1 if any(w in text for w in ["whatsapp","aadhar","urgent","guaranteed"]) else 0
-    has_no_company = 1 if len(text.strip()) < 50 else 0
-    has_email = 1 if ("@gmail" in text or "@yahoo" in text) else 0
+    has_no_company = 1 if len(text.strip()) < 100 else 0
+    has_email = 1 if ("@gmail" in text or "@yahoo" in text or "@hotmail" in text) else 0
     manual = sp.csr_matrix(np.array([[has_pay_fee, has_unrealistic, has_suspicious, has_no_company, has_email]]))
     combined = sp.hstack([tfidf_features, manual])
     prediction = job_model.predict(combined)[0]

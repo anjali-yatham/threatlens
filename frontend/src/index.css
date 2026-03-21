@@ -448,3 +448,201 @@ body::before {
   .hero-h1 { font-size: 2rem; }
   .brand-title { font-size: 2.5rem; }
 }
+/* ═══════════════════════════════════════════════════════
+   THREATLENS — DETAILED RESULT PANEL STYLES
+   Append this block to the bottom of your index.css
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Wrapper ── */
+.res-detailed {
+  margin-top: 24px;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: fadeSlideIn 0.4s ease;
+}
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.res-detailed--threat {
+  background: linear-gradient(135deg, rgba(255,68,68,0.07), rgba(255,170,0,0.05));
+  border: 1px solid rgba(255,68,68,0.25);
+}
+.res-detailed--safe {
+  background: linear-gradient(135deg, rgba(0,255,136,0.06), rgba(0,212,255,0.04));
+  border: 1px solid rgba(0,255,136,0.2);
+}
+
+/* ── Header row ── */
+.res-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.res-status-block {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.res-status-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+.res-status-icon.threat-icon { filter: drop-shadow(0 0 8px rgba(255,170,0,0.6)); }
+.res-status-icon.safe-icon   { filter: drop-shadow(0 0 8px rgba(0,255,136,0.6)); }
+
+.res-status-label {
+  font-family: 'Orbitron', monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.res-status-label.status-danger { color: #ff4444; text-shadow: 0 0 12px rgba(255,68,68,0.5); }
+.res-status-label.status-warn   { color: #ffaa00; text-shadow: 0 0 12px rgba(255,170,0,0.5); }
+.res-status-label.status-safe   { color: #00ff88; text-shadow: 0 0 12px rgba(0,255,136,0.5); }
+
+.res-status-sub {
+  font-size: 0.82rem;
+  color: rgba(224,230,240,0.6);
+  margin-top: 3px;
+}
+
+.res-score-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  white-space: nowrap;
+}
+.res-score-num {
+  font-family: 'Orbitron', monospace;
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.res-score-num.status-danger { color: #ff4444; text-shadow: 0 0 16px rgba(255,68,68,0.5); }
+.res-score-num.status-warn   { color: #ffaa00; text-shadow: 0 0 16px rgba(255,170,0,0.5); }
+.res-score-num.status-safe   { color: #00ff88; text-shadow: 0 0 16px rgba(0,255,136,0.5); }
+
+.res-score-lbl {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: rgba(224,230,240,0.5);
+  text-transform: uppercase;
+}
+
+/* ── Probability bar ── */
+.res-bar-section { display: flex; flex-direction: column; gap: 8px; }
+.res-bar-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.res-bar-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: rgba(224,230,240,0.7);
+}
+.res-bar-pct {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.res-bar-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.res-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.res-bar-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  font-family: 'Orbitron', monospace;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+/* ── Section titles ── */
+.res-section-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: #00d4ff;
+  margin-bottom: 10px;
+}
+
+/* ── Indicators ── */
+.res-indicators-section { display: flex; flex-direction: column; }
+.res-indicators-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.res-indicator-tag {
+  background: rgba(255,68,68,0.12);
+  border: 1px solid rgba(255,68,68,0.35);
+  color: #ff7777;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* ── Security analysis ── */
+.res-analysis-section { display: flex; flex-direction: column; }
+.res-analysis-list { display: flex; flex-direction: column; gap: 10px; }
+.res-analysis-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+.res-analysis-icon { font-size: 1.1rem; flex-shrink: 0; }
+.res-analysis-text {
+  flex: 1;
+  font-size: 0.88rem;
+  color: rgba(224,230,240,0.85);
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 500;
+}
+
+/* ── Badges ── */
+.res-badge {
+  flex-shrink: 0;
+  font-family: 'Orbitron', monospace;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 9px;
+  border-radius: 6px;
+}
+.badge-critical { background: rgba(255,68,68,0.18);  border: 1px solid rgba(255,68,68,0.4);  color: #ff6666; }
+.badge-medium   { background: rgba(255,170,0,0.15);  border: 1px solid rgba(255,170,0,0.4);  color: #ffaa00; }
+.badge-low      { background: rgba(0,212,255,0.12);  border: 1px solid rgba(0,212,255,0.3);  color: #00d4ff; }
+.badge-safe     { background: rgba(0,255,136,0.12);  border: 1px solid rgba(0,255,136,0.3);  color: #00ff88; }
+
+/* ── Confidence footer ── */
+.res-conf-footer {
+  font-size: 0.78rem;
+  color: rgba(224,230,240,0.45);
+  font-family: 'Rajdhani', sans-serif;
+  text-align: right;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 12px;
+}

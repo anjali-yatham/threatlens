@@ -147,8 +147,8 @@ def predict_job():
         has_pay_fee = 1 if any(w in text for w in ['fee', 'registration', 'deposit', 'pay']) else 0
         has_unrealistic_salary = 1 if any(w in text for w in ['100000', '50000', 'lakh', 'crore']) else 0
         has_suspicious_words = 1 if any(w in text for w in ['whatsapp', 'aadhar', 'urgent', 'guaranteed']) else 0
-        has_no_company = 1 if len(text.strip()) < 50 else 0
-        has_email_in_post = 1 if ('@gmail' in text or '@yahoo' in text) else 0
+        has_no_company = 1 if len(text.strip()) < 100 else 0
+        has_email_in_post = 1 if ('@gmail' in text or '@yahoo' in text or '@hotmail' in text) else 0
 
         manual_features = sp.csr_matrix(np.array([
             [

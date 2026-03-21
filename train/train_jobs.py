@@ -78,7 +78,7 @@ manual_features = pd.DataFrame({
     'has_unrealistic_salary': data['message'].str.contains('100000|50000|lakh|crore', regex=True).astype(int),
     'has_suspicious_words': data['message'].str.contains('whatsapp|aadhar|urgent|guaranteed', regex=True).astype(int),
     'has_no_company': data['message'].str.contains('company_profile', regex=False).astype(int),
-    'has_email_in_post': data['message'].str.contains('@gmail|@yahoo', regex=True).astype(int),
+    'has_email_in_post': data['message'].str.contains('@gmail|@yahoo|@hotmail', regex=True).astype(int),
 })
 
 # Combine features
