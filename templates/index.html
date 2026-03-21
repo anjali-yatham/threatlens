@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ThreatLens</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" defer></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</head>
+<body>
+    <!-- PAGE 1: Auth Landing -->
+    <div id="page-auth" class="page">
+        <div id="cyber-bg">
+            <div class="corner top-left"></div>
+            <div class="corner top-right"></div>
+            <div class="corner bottom-left"></div>
+            <div class="corner bottom-right"></div>
+        </div>
+        <div class="brand">
+            <i class="fas fa-shield-alt"></i>
+            <h1>ThreatLens</h1>
+        </div>
+        <div class="badge-pill">Next-Gen Security</div>
+        <div class="cards-row">
+            <div class="glass-card">Sign In</div>
+            <div class="glass-card">Create Account</div>
+        </div>
+        <div class="features-preview">Features Preview</div>
+    </div>
+
+    <!-- PAGE 2: Login Form -->
+    <div id="page-login" class="page">
+        <button class="glow-btn" onclick="goBack()">Back</button>
+        <input type="email" id="login-email" class="cyber-input" placeholder="Email">
+        <input type="password" id="login-pass" class="cyber-input" placeholder="Password">
+        <div id="login-error" class="error"></div>
+        <button class="glow-btn" onclick="login()">Sign In</button>
+    </div>
+
+    <!-- PAGE 3: Signup Form -->
+    <div id="page-signup" class="page">
+        <button class="glow-btn" onclick="goBack()">Back</button>
+        <input type="text" id="signup-name" class="cyber-input" placeholder="Name">
+        <input type="email" id="signup-email" class="cyber-input" placeholder="Email">
+        <input type="password" id="signup-pass" class="cyber-input" placeholder="Password">
+        <button class="glow-btn" onclick="signup()">Create Account</button>
+    </div>
+
+    <!-- PAGE 4: Main Dashboard -->
+    <div id="page-app" class="page">
+        <nav>
+            <div class="brand">
+                <i class="fas fa-shield-alt"></i>
+                <span>ThreatLens</span>
+            </div>
+            <ul>
+                <li><a href="#how-it-works">How It Works</a></li>
+                <li><a href="#detection">Detection</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><button class="glow-btn" onclick="logout()">Logout</button></li>
+            </ul>
+        </nav>
+        <section class="hero-section">
+            <div class="hero-content">
+                <div class="hero-left">
+                    <div class="badge-pill">
+                        <span class="pulse-dot"></span>AI-Powered Security
+                    </div>
+                    <h1 class="hero-title">
+                        <span class="gradient-text">Detect Cyber Threats</span><br>
+                        Instantly with AI
+                    </h1>
+                    <p class="hero-subtitle">
+                        Advanced machine learning detects phishing URLs, scam emails,
+                        fake messages and fraudulent job postings in real-time.
+                    </p>
+                    <div class="hero-stats">
+                        <div class="stat-badge"><i class="fas fa-circle-check"></i>10M+ Scans</div>
+                        <div class="stat-badge"><i class="fas fa-shield-halved"></i>99.7% Accuracy</div>
+                        <div class="stat-badge"><i class="fas fa-bolt"></i>Real-time</div>
+                    </div>
+                    <button class="glow-btn large" onclick="document.getElementById('detection').scrollIntoView({behavior:'smooth'})">
+                        <i class="fas fa-magnifying-glass"></i> Start Scanning
+                    </button>
+                </div>
+                <div class="hero-right">
+                    <div class="shield-container">
+                        <div class="shield-glow"></div>
+                        <div class="shield-3d">
+                            <svg viewBox="0 0 200 220" style="width:100%;height:100%">
+                                <defs>
+                                    <linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" style="stop-color:#00d4ff"/>
+                                        <stop offset="100%" style="stop-color:#7b68ee"/>
+                                    </linearGradient>
+                                </defs>
+                                <path d="M100 10 L180 50 L180 120 C180 170 140 200 100 210 
+                                    C60 200 20 170 20 120 L20 50 Z" 
+                                    fill="rgba(13,21,37,0.9)" stroke="url(#sg)" stroke-width="3"/>
+                                <path d="M100 30 L160 60 L160 115 C160 155 130 180 100 190 
+                                    C70 180 40 155 40 115 L40 60 Z" 
+                                    fill="none" stroke="rgba(0,212,255,0.3)" stroke-width="1"/>
+                                <rect x="80" y="105" width="40" height="35" rx="5" 
+                                    fill="none" stroke="#00d4ff" stroke-width="2.5"/>
+                                <path d="M85 105 L85 95 C85 82 115 82 115 95 L115 105" 
+                                    fill="none" stroke="#00d4ff" stroke-width="2.5"/>
+                                <circle cx="100" cy="122" r="4" fill="#00d4ff"/>
+                                <line x1="100" y1="126" x2="100" y2="132" 
+                                    stroke="#00d4ff" stroke-width="2.5"/>
+                            </svg>
+                        </div>
+                        <div class="node" style="top:15%;left:5%"></div>
+                        <div class="node" style="top:20%;right:0%"></div>
+                        <div class="node" style="bottom:20%;left:0%"></div>
+                        <div class="node" style="bottom:15%;right:5%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section id="how-it-works">
+        <h2 class="section-label">How It Works</h2>
+        <div class="cards-row">
+            <div class="glass-card step-card">
+                <span class="step-num" style="color:rgba(0,212,255,0.15)">01</span>
+                <div class="card-icon-wrap cyan"><i class="fas fa-link"></i></div>
+                <h3>Enter Content</h3>
+                <p>Paste any suspicious URL, email, message or job posting.</p>
+            </div>
+            <div class="glass-card step-card">
+                <span class="step-num" style="color:rgba(123,104,238,0.15)">02</span>
+                <div class="card-icon-wrap purple"><i class="fas fa-desktop"></i></div>
+                <h3>AI Analysis</h3>
+                <p>ML models analyze 50+ features including patterns and keywords.</p>
+            </div>
+            <div class="glass-card step-card">
+                <span class="step-num" style="color:rgba(0,255,136,0.15)">03</span>
+                <div class="card-icon-wrap green"><i class="fas fa-shield-halved"></i></div>
+                <h3>Risk Detection</h3>
+                <p>Get instant results with confidence score and threat analysis.</p>
+            </div>
+        </div>
+    </section>
+    <section id="features">
+        <h2 class="section-label">Features</h2>
+        <div class="cards-row four">
+            <div class="glass-card feature-card">
+                <div class="card-icon-wrap cyan"><i class="fas fa-desktop"></i></div>
+                <h3>AI-Powered Detection</h3>
+                <p>Deep learning models trained on millions of phishing samples.</p>
+            </div>
+            <div class="glass-card feature-card">
+                <div class="card-icon-wrap purple"><i class="fas fa-bolt"></i></div>
+                <h3>Real-time Analysis</h3>
+                <p>Instant scanning with results in under 2 seconds.</p>
+            </div>
+            <div class="glass-card feature-card">
+                <div class="card-icon-wrap green"><i class="fas fa-chart-bar"></i></div>
+                <h3>Multi-Threat Detection</h3>
+                <p>Detects URL, email, SMS and job posting scams.</p>
+            </div>
+            <div class="glass-card feature-card">
+                <div class="card-icon-wrap orange"><i class="fas fa-table-cells"></i></div>
+                <h3>Explainable Results</h3>
+                <p>Clear confidence scores and threat explanations.</p>
+            </div>
+        </div>
+        <div class="stats-bar">
+            <div class="stat">
+                <div class="stat-number" style="background:linear-gradient(135deg,#00d4ff,#0099cc);
+                    background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent">99.7%</div>
+                <div class="stat-label">Detection Accuracy</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number" style="background:linear-gradient(135deg,#9b5de5,#c77dff);
+                    background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent">1.2s</div>
+                <div class="stat-label">Avg Scan Time</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number" style="background:linear-gradient(135deg,#00ff88,#00cc6a);
+                    background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent">4</div>
+                <div class="stat-label">Detection Types</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number" style="background:linear-gradient(135deg,#ffaa00,#ff8800);
+                    background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent">100%</div>
+                <div class="stat-label">Free to Use</div>
+            </div>
+        </div>
+    </section>
+    <footer>
+        <p>&copy; 2026 ThreatLens</p>
+    </footer>
+</div>
+</body>
+</html>
