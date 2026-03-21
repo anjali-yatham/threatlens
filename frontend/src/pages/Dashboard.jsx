@@ -1,167 +1,90 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import axios from 'axios'
-
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-function getRiskScore(result, confidence) {
-  if (['Phishing', 'Spam/Phishing', 'Fake'].includes(result)) return confidence
-  return Math.max(0, 100 - confidence)
-}
-
-function getIndicators(result, activeTab, input) {
-  const indicators = []
-  const text = (input || '').toLowerCase()
-  const isThreat = ['Phishing', 'Spam/Phishing', 'Fake'].includes(result)
-
-  if (activeTab === 'url') {
-    const url = text
-    if (isThreat) {
-      if (/\d{1,3}(\.\d{1,3}){3}/.test(url))       indicators.push('IP Address URL')
-      if (url.split('.').length > 5)                 indicators.push('Excessive Subdomains')
-      if (['tk','ml','cf','gq','xyz'].some(t => url.endsWith('.'+t))) indicators.push('Suspicious TLD')
-      if (url.includes('@'))                         indicators.push('@ Symbol in URL')
-      if (!url.startsWith('https'))                  indicators.push('No HTTPS')
-      const brands = ['google','facebook','amazon','paypal','microsoft','apple','instagram']
-      const domain = url.replace(/https?:\/\/(www\.)?/, '').split('/')[0]
-      if (brands.some(b => url.includes(b) && !domain.startsWith(b))) indicators.push('Brand Impersonation')
-      if (indicators.length === 0)                   indicators.push('Suspicious Pattern')
-    }
-  } else if (activeTab === 'email' || activeTab === 'scam') {
-    if (isThreat) {
-      if (/urgent|immediately|act now|limited time/i.test(text)) indicators.push('Urgency Language')
-      if (/click here|verify account|confirm your/i.test(text))  indicators.push('Social Engineering')
-      if (/\$\d+|free money|prize|winner/i.test(text))           indicators.push('Financial Lure')
-      if (/@gmail|@yahoo|@hotmail/i.test(text))                  indicators.push('Non-Corporate Sender')
-      if (/password|ssn|credit card|bank account/i.test(text))   indicators.push('Credential Harvesting')
-      if (indicators.length === 0)                                indicators.push('Suspicious Content')
-    }
-  } else if (activeTab === 'job') {
-    if (isThreat) {
-      if (/fee|registration|deposit|pay upfront/i.test(text))    indicators.push('Upfront Fee Required')
-      if (/whatsapp|telegram/i.test(text))                       indicators.push('Unofficial Contact Channel')
-      if (/guaranteed|no experience|work from home.{0,20}earn/i.test(text)) indicators.push('Unrealistic Promises')
-      if (/@gmail|@yahoo/i.test(text))                           indicators.push('Non-Corporate Email')
-      if (/aadhar|pan card|passport copy/i.test(text))           indicators.push('Sensitive Data Request')
-      if (indicators.length === 0)                                indicators.push('Suspicious Job Pattern')
-    }
-  }
-  return indicators
-}
-
-function getSecurityAnalysis(result, confidence, activeTab) {
-  const isThreat = ['Phishing', 'Spam/Phishing', 'Fake'].includes(result)
-  const riskScore = getRiskScore(result, confidence)
-
-  if (!isThreat) {
-    return [
-      { icon: '✅', text: 'No malicious patterns detected.', badge: 'SAFE', badgeClass: 'badge-safe' },
-      { icon: '🔒', text: 'Content appears legitimate and trustworthy.', badge: 'LOW', badgeClass: 'badge-low' },
-    ]
-  }
-
-  const analyses = []
-
-  if (riskScore >= 80) {
-    analyses.push({ icon: '🚨', text: 'High-confidence threat detected. Do not interact with this content.', badge: 'CRITICAL', badgeClass: 'badge-critical' })
-  } else if (riskScore >= 50) {
-    analyses.push({ icon: '⚠️', text: 'Some suspicious patterns found. Exercise caution.', badge: 'MEDIUM', badgeClass: 'badge-medium' })
-  } else {
-    analyses.push({ icon: '🔍', text: 'Minor anomalies detected. Verify before proceeding.', badge: 'LOW', badgeClass: 'badge-low' })
-  }
-
-  const tips = {
-    url:   'Do not enter credentials on this site. Verify the domain manually.',
-    email: 'Do not click any links or download attachments from this email.',
-    scam:  'Do not respond or share personal information with this sender.',
-    job:   'Do not pay any fees or share sensitive documents with this employer.',
-  }
-  analyses.push({ icon: '🔎', text: tips[activeTab] || 'Verify the source independently before taking any action.', badge: 'LOW', badgeClass: 'badge-low' })
-
-  return analyses
-}
-
-// ── component ─────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
-  const [activeTab, setActiveTab]   = useState('url')
-  const [urlInput, setUrlInput]     = useState('')
+  const [activeTab, setActiveTab] = useState('url')
+  const [urlInput, setUrlInput] = useState('')
   const [emailInput, setEmailInput] = useState('')
-  const [scamInput, setScamInput]   = useState('')
-  const [jobInput, setJobInput]     = useState('')
-  const [result, setResult]         = useState(null)
-  const [analyzing, setAnalyzing]   = useState(false)
+  const [scamInput, setScamInput] = useState('')
+  const [jobInput, setJobInput] = useState('')
+  const [result, setResult] = useState(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [history, setHistory] = useState([])
 
   useEffect(() => {
     const particles = []
     for (let i = 0; i < 40; i++) {
       const p = document.createElement('div')
       p.className = 'particle'
-      const size  = Math.random() * 3 + 1
+      const size = Math.random() * 3 + 1
       const color = Math.random() > 0.5 ? '#00d4ff' : '#7b2fff'
       p.style.cssText = `left:${Math.random()*100}%;width:${size}px;height:${size}px;background:${color};box-shadow:0 0 ${size*2}px ${color};animation-duration:${Math.random()*14+8}s;animation-delay:-${Math.random()*14}s;`
       document.body.appendChild(p)
       particles.push(p)
     }
+    fetchHistory()
     return () => particles.forEach(p => p.remove())
   }, [])
 
-  const currentInput = { url: urlInput, email: emailInput, scam: scamInput, job: jobInput }[activeTab]
-
-  const analyzeContent = async (type) => {
-    const inputs    = { url: urlInput, email: emailInput, scam: scamInput, job: jobInput }
-    const endpoints = {
-      url:   'http://localhost:5000/api/predict-url',
-      email: 'http://localhost:5000/api/predict-email',
-      scam:  'http://localhost:5000/api/predict-scam',
-      job:   'http://localhost:5000/api/predict-job',
-    }
-    const value = inputs[type]
-    if (!value.trim()) return
-    setAnalyzing(true)
-    setResult(null)
-    try {
-      const token = localStorage.getItem('token')
-      const body  = type === 'url' ? { url: value } : { text: value }
-      const res   = await axios.post(endpoints[type], body, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      setResult({ ...res.data, inputSnapshot: value })
-    } catch {
-      setResult({ result: 'Error', confidence: 0, inputSnapshot: value })
-    } finally {
-      setAnalyzing(false)
-    }
+  const fetchHistory = () => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    fetch('http://localhost:5000/api/history', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    })
+    .then(r => r.json())
+    .then(data => { if (Array.isArray(data)) setHistory(data) })
+    .catch(err => console.error('History error:', err))
   }
 
-  const isThreat  = result && ['Phishing', 'Spam/Phishing', 'Fake'].includes(result.result)
-  const riskScore = result ? getRiskScore(result.result, result.confidence) : 0
-  const indicators = result ? getIndicators(result.result, activeTab, result.inputSnapshot) : []
-  const secAnalysis = result ? getSecurityAnalysis(result.result, result.confidence, activeTab) : []
+  const analyzeContent = (type) => {
+    const inputs = { url: urlInput, email: emailInput, scam: scamInput, job: jobInput }
+    const endpoints = {
+      url: 'http://localhost:5000/api/predict-url',
+      email: 'http://localhost:5000/api/predict-email',
+      scam: 'http://localhost:5000/api/predict-scam',
+      job: 'http://localhost:5000/api/predict-job'
+    }
+    const value = inputs[type]
+    if (!value || !value.trim()) return
+    setAnalyzing(true)
+    setResult(null)
+    const token = localStorage.getItem('token')
+    const body = type === 'url' ? { url: value } : { text: value }
+    fetch(endpoints[type], {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(body)
+    })
+    .then(r => r.json())
+    .then(data => { setResult(data); setTimeout(() => fetchHistory(), 500) })
+    .catch(() => setResult({ result: 'Error', confidence: 0 }))
+    .finally(() => setAnalyzing(false))
+  }
 
-  const barColor =
-    riskScore >= 80 ? '#ff4444' :
-    riskScore >= 50 ? '#ffaa00' : '#00ff88'
+  const isThreat = result && ['Phishing', 'Spam/Phishing', 'Fake'].includes(result.result)
 
-  const statusLabel =
-    !result ? '' :
-    riskScore >= 80 ? 'DANGEROUS' :
-    riskScore >= 50 ? 'SUSPICIOUS' : 'SAFE'
+  // ✅ FIXED: risk score = confidence for threats, low value for safe results
+  const riskScore = result
+    ? isThreat
+      ? result.confidence
+      : Math.max(1, 100 - result.confidence)
+    : 0
 
-  const statusClass =
-    riskScore >= 80 ? 'status-danger' :
-    riskScore >= 50 ? 'status-warn'   : 'status-safe'
+  const barColor = riskScore >= 75 ? '#ff4444' : riskScore >= 40 ? '#ffaa00' : '#00ff88'
+  const typeIcon = { URL: '🔗', Email: '📧', Scam: '⚠️', Job: '💼' }
+  const indicatorMap = {
+    'Phishing':      ['Suspicious TLD Detected', 'Brand Impersonation', 'No HTTPS Encryption', 'Malicious Domain Pattern'],
+    'Spam/Phishing': ['Urgency Language Detected', 'Prize/Lottery Scam Pattern', 'Request for Personal Info', 'Suspicious Links Found'],
+    'Fake':          ['Upfront Fee Required', 'Unrealistic Salary Offered', 'No Company Information', 'Suspicious Contact Method'],
+  }
+  const indicators = result ? (indicatorMap[result.result] || []) : []
 
   return (
     <>
-      <div className="corner corner-tl" />
-      <div className="corner corner-tr" />
-      <div className="corner corner-bl" />
-      <div className="corner corner-br" />
       <div className="scan-line" />
 
-      {/* NAVBAR */}
       <nav className="navbar">
         <div className="nav-logo">🛡️ <span>ThreatLens</span></div>
         <div className="nav-links">
@@ -175,36 +98,23 @@ export default function Dashboard() {
         </div>
       </nav>
 
-      {/* HERO */}
       <section className="hero">
         <div className="hero-inner">
           <div className="hero-left">
-            <div className="badge-pill">
-              <span className="pulse-dot" />
-              AI-Powered Security
-            </div>
+            <div className="badge-pill"><span className="pulse-dot" />AI-Powered Security</div>
             <h1 className="hero-h1">
               <span className="grad-text">Detect Phishing</span><br />
               <span style={{ color: '#fff' }}>Websites Instantly</span><br />
               <span className="grad-text2">with AI</span>
             </h1>
-            <p className="hero-desc">
-              Our advanced machine learning system analyzes URLs, emails, messages
-              and job postings in real-time, detecting threats before they can harm you.
-            </p>
+            <p className="hero-desc">Our advanced machine learning system analyzes URLs, emails, messages and job postings in real-time, detecting threats before they can harm you.</p>
             <div className="hero-pills">
               <div className="stat-pill">✅ 10M+ URLs Scanned</div>
               <div className="stat-pill">🛡️ 99.7% Accuracy</div>
               <div className="stat-pill">⚡ Real-time Analysis</div>
             </div>
-            <button
-              className="glow-btn large"
-              onClick={() => document.getElementById('detection').scrollIntoView({ behavior: 'smooth' })}
-            >
-              🔍 Start Scanning
-            </button>
+            <button className="glow-btn large" onClick={() => document.getElementById('detection').scrollIntoView({ behavior: 'smooth' })}>🔍 Start Scanning</button>
           </div>
-
           <div className="hero-right">
             <div className="shield-wrap">
               <div className="shield-glow" />
@@ -216,28 +126,18 @@ export default function Dashboard() {
                       <stop offset="50%" style={{ stopColor: '#7b68ee' }} />
                       <stop offset="100%" style={{ stopColor: '#00d4ff' }} />
                     </linearGradient>
-                    <filter id="gf">
-                      <feGaussianBlur stdDeviation="4" result="b" />
-                      <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-                    </filter>
+                    <filter id="gf"><feGaussianBlur stdDeviation="4" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
                   </defs>
-                  <path d="M100 10 L180 50 L180 120 C180 170 140 200 100 210 C60 200 20 170 20 120 L20 50 Z"
-                    fill="rgba(13,21,37,0.9)" stroke="url(#sg)" strokeWidth="3" filter="url(#gf)" />
-                  <path d="M100 30 L160 60 L160 115 C160 155 130 180 100 190 C70 180 40 155 40 115 L40 60 Z"
-                    fill="none" stroke="rgba(0,212,255,0.25)" strokeWidth="1" />
+                  <path d="M100 10 L180 50 L180 120 C180 170 140 200 100 210 C60 200 20 170 20 120 L20 50 Z" fill="rgba(13,21,37,0.9)" stroke="url(#sg)" strokeWidth="3" filter="url(#gf)" />
+                  <path d="M100 30 L160 60 L160 115 C160 155 130 180 100 190 C70 180 40 155 40 115 L40 60 Z" fill="none" stroke="rgba(0,212,255,0.25)" strokeWidth="1" />
                   <g transform="translate(70,70)">
                     <rect x="10" y="35" width="40" height="35" rx="5" fill="none" stroke="#00d4ff" strokeWidth="2.5" />
-                    <path d="M20 35 L20 25 C20 15 30 5 40 5 C50 5 60 15 60 25 L60 35"
-                      transform="translate(-10,0)" fill="none" stroke="#00d4ff" strokeWidth="2.5" strokeLinecap="round" />
+                    <path d="M20 35 L20 25 C20 15 30 5 40 5 C50 5 60 15 60 25 L60 35" transform="translate(-10,0)" fill="none" stroke="#00d4ff" strokeWidth="2.5" strokeLinecap="round" />
                     <circle cx="30" cy="52" r="4" fill="#00d4ff" />
                     <line x1="30" y1="56" x2="30" y2="62" stroke="#00d4ff" strokeWidth="2.5" />
                   </g>
-                  <line x1="40" y1="80" x2="60" y2="80" stroke="#00d4ff" strokeWidth="1" opacity="0.5">
-                    <animate attributeName="opacity" values="0.2;1;0.2" dur="2s" repeatCount="indefinite" />
-                  </line>
-                  <line x1="140" y1="80" x2="160" y2="80" stroke="#00d4ff" strokeWidth="1" opacity="0.5">
-                    <animate attributeName="opacity" values="0.2;1;0.2" dur="2s" repeatCount="indefinite" begin="0.7s" />
-                  </line>
+                  <line x1="40" y1="80" x2="60" y2="80" stroke="#00d4ff" strokeWidth="1" opacity="0.5"><animate attributeName="opacity" values="0.2;1;0.2" dur="2s" repeatCount="indefinite" /></line>
+                  <line x1="140" y1="80" x2="160" y2="80" stroke="#00d4ff" strokeWidth="1" opacity="0.5"><animate attributeName="opacity" values="0.2;1;0.2" dur="2s" repeatCount="indefinite" begin="0.7s" /></line>
                 </svg>
               </div>
               <div className="node" style={{ top: '10%', left: '-5%' }} />
@@ -249,7 +149,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
       <section className="section" id="how-it-works">
         <div className="sec-head">
           <span className="sec-label">Process</span>
@@ -268,8 +167,8 @@ export default function Dashboard() {
             <span className="step-num" style={{ color: 'rgba(123,104,238,0.1)' }}>02</span>
             <span className="card-icon-lg">🖥️</span>
             <h3>AI Analysis</h3>
-            <p>Our ML models analyze patterns, structures and known threat signatures.</p>
-            <div className="card-tag purple"><span className="dot-sm purple" />Deep learning</div>
+            <p>Our ML models analyze 50+ features including patterns, keywords and domain info.</p>
+            <div className="card-tag purple"><span className="dot-sm purple" />Deep learning models</div>
           </div>
           <div className="glass-card step-card">
             <span className="step-num" style={{ color: 'rgba(0,255,136,0.1)' }}>03</span>
@@ -281,7 +180,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* DETECTION */}
       <section className="section" id="detection">
         <div className="sec-head">
           <span className="sec-label">Scanner</span>
@@ -291,176 +189,156 @@ export default function Dashboard() {
         <div className="glass-card detect-box">
           <div className="tabs">
             {['url', 'email', 'scam', 'job'].map(type => (
-              <button
-                key={type}
-                className={`tab ${activeTab === type ? 'active' : ''}`}
-                onClick={() => { setActiveTab(type); setResult(null) }}
-              >
-                {type === 'url'   && '🔗 URL Check'}
+              <button key={type} className={`tab ${activeTab === type ? 'active' : ''}`}
+                onClick={() => { setActiveTab(type); setResult(null) }}>
+                {type === 'url' && '🔗 URL Check'}
                 {type === 'email' && '📧 Email Check'}
-                {type === 'scam'  && '⚠️ Scam Message'}
-                {type === 'job'   && '💼 Job Posting'}
+                {type === 'scam' && '⚠️ Scam Message'}
+                {type === 'job' && '💼 Job Posting'}
               </button>
             ))}
           </div>
 
-          {/* URL tab */}
           <div className={`tab-panel ${activeTab === 'url' ? 'active' : ''}`}>
             <p className="input-label">Enter suspicious URL to analyze</p>
-            <input type="text" className="cyber-input" value={urlInput}
-              onChange={e => setUrlInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && analyzeContent('url')}
-              placeholder="https://suspicious-site.com/login" />
-            <button className="glow-btn large" style={{ marginTop: '16px' }}
-              onClick={() => analyzeContent('url')}>
-              🔍 Analyze URL
-            </button>
+            <input type="text" className="cyber-input" value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="https://suspicious-site.com/login" />
+            <button className="glow-btn large" style={{ marginTop: '16px' }} onClick={() => analyzeContent('url')}>🔍 Analyze URL</button>
           </div>
 
-          {/* Email tab */}
           <div className={`tab-panel ${activeTab === 'email' ? 'active' : ''}`}>
             <p className="input-label">Paste suspicious email content below</p>
-            <textarea className="cyber-textarea" value={emailInput}
-              onChange={e => setEmailInput(e.target.value)}
-              placeholder="Paste the suspicious email content here..." />
-            <button className="glow-btn large" style={{ marginTop: '16px' }}
-              onClick={() => analyzeContent('email')}>
-              🔍 Analyze Email
-            </button>
+            <textarea className="cyber-textarea" value={emailInput} onChange={e => setEmailInput(e.target.value)} placeholder="Paste the suspicious email content here..." />
+            <button className="glow-btn large" style={{ marginTop: '16px' }} onClick={() => analyzeContent('email')}>🔍 Analyze Email</button>
           </div>
 
-          {/* Scam tab */}
           <div className={`tab-panel ${activeTab === 'scam' ? 'active' : ''}`}>
             <p className="input-label">Paste suspicious message below</p>
-            <textarea className="cyber-textarea" value={scamInput}
-              onChange={e => setScamInput(e.target.value)}
-              placeholder="Paste the suspicious message here..." />
-            <button className="glow-btn large" style={{ marginTop: '16px' }}
-              onClick={() => analyzeContent('scam')}>
-              🔍 Analyze Message
-            </button>
+            <textarea className="cyber-textarea" value={scamInput} onChange={e => setScamInput(e.target.value)} placeholder="Paste the suspicious message here..." />
+            <button className="glow-btn large" style={{ marginTop: '16px' }} onClick={() => analyzeContent('scam')}>🔍 Analyze Message</button>
           </div>
 
-          {/* Job tab */}
           <div className={`tab-panel ${activeTab === 'job' ? 'active' : ''}`}>
             <p className="input-label">Paste job posting description below</p>
-            <textarea className="cyber-textarea" value={jobInput}
-              onChange={e => setJobInput(e.target.value)}
-              placeholder="Paste the job posting description here..." />
-            <button className="glow-btn large" style={{ marginTop: '16px' }}
-              onClick={() => analyzeContent('job')}>
-              🔍 Analyze Job Post
-            </button>
+            <textarea className="cyber-textarea" value={jobInput} onChange={e => setJobInput(e.target.value)} placeholder="Paste the job posting description here..." />
+            <button className="glow-btn large" style={{ marginTop: '16px' }} onClick={() => analyzeContent('job')}>🔍 Analyze Job Post</button>
           </div>
 
-          {/* ── RESULT PANEL ─────────────────────────────────────────────── */}
           {(analyzing || result) && (
             <div className="result-box">
               {analyzing && (
-                <div className="res-loading">
-                  <div className="spinner" />
-                  <span>Analyzing with AI...</span>
-                </div>
+                <div className="res-loading"><div className="spinner" /><span>Analyzing with AI...</span></div>
               )}
-
-              {result && !analyzing && result.result !== 'Error' && (
-                <div className={`res-detailed ${isThreat ? 'res-detailed--threat' : 'res-detailed--safe'}`}>
-
-                  {/* ── Header row: status + risk score ── */}
-                  <div className="res-header-row">
-                    <div className="res-status-block">
-                      <span className={`res-status-icon ${isThreat ? 'threat-icon' : 'safe-icon'}`}>
-                        {isThreat ? '⚠️' : '✅'}
-                      </span>
+              {result && !analyzing && (
+                <div style={{
+                  background: isThreat ? 'rgba(255,68,68,0.07)' : 'rgba(0,255,136,0.07)',
+                  border: isThreat ? '1px solid rgba(255,68,68,0.35)' : '1px solid rgba(0,255,136,0.35)',
+                  borderRadius: '18px', padding: '28px',
+                  boxShadow: isThreat ? '0 0 30px rgba(255,68,68,0.1)' : '0 0 30px rgba(0,255,136,0.08)'
+                }}>
+                  {/* Header Row */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <span style={{ fontSize: '2rem' }}>{isThreat ? '⚠️' : '✅'}</span>
                       <div>
-                        <div className={`res-status-label ${statusClass}`}>
-                          {isThreat ? (activeTab === 'job' ? 'FAKE JOB DETECTED' : 'SUSPICIOUS ACTIVITY') : 'SAFE'}
+                        <div style={{ fontFamily: 'Orbitron,monospace', fontSize: '1.3rem', fontWeight: 700, color: isThreat ? '#ff4444' : '#00ff88' }}>
+                          {isThreat ? 'THREAT DETECTED' : 'SAFE'}
                         </div>
-                        <div className="res-status-sub">
-                          {isThreat
-                            ? 'Potential threat indicators detected — proceed with caution'
-                            : `${result.result} — no threats found`}
+                        <div style={{ color: 'rgba(224,230,240,0.6)', fontSize: '0.9rem', marginTop: '4px' }}>
+                          {isThreat ? 'Potential threat indicators detected — proceed with caution' : `${result.result} — no threats found`}
                         </div>
                       </div>
                     </div>
-                    <div className="res-score-block">
-                      <span className={`res-score-num ${statusClass}`}>{riskScore}%</span>
-                      <span className="res-score-lbl">RISK SCORE</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontFamily: 'Orbitron,monospace', fontSize: '2rem', fontWeight: 800, color: barColor }}>{riskScore}%</div>
+                      <div style={{ color: 'rgba(224,230,240,0.5)', fontSize: '0.75rem', letterSpacing: '2px' }}>RISK SCORE</div>
                     </div>
                   </div>
 
-                  {/* ── Phishing probability bar ── */}
-                  <div className="res-bar-section">
-                    <div className="res-bar-label-row">
-                      <span className="res-bar-title">
+                  {/* Progress Bar */}
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ color: 'rgba(224,230,240,0.6)', fontSize: '0.8rem', letterSpacing: '1px' }}>
                         {activeTab === 'url'   && 'PHISHING PROBABILITY'}
                         {activeTab === 'email' && 'SPAM PROBABILITY'}
                         {activeTab === 'scam'  && 'SCAM PROBABILITY'}
                         {activeTab === 'job'   && 'FAKE JOB PROBABILITY'}
                       </span>
-                      <span className="res-bar-pct" style={{ color: barColor }}>{riskScore}%</span>
+                      <span style={{ color: barColor, fontWeight: 700 }}>{riskScore}%</span>
                     </div>
-                    <div className="res-bar-track">
-                      <div
-                        className="res-bar-fill"
-                        style={{ width: `${riskScore}%`, background: barColor, boxShadow: `0 0 8px ${barColor}` }}
-                      />
+                    <div style={{ height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${riskScore}%`, background: barColor, boxShadow: `0 0 8px ${barColor}`, borderRadius: '4px', transition: 'width 0.8s ease' }} />
                     </div>
-                    <div className="res-bar-legend">
-                      <span style={{ color: '#00ff88' }}>SAFE</span>
-                      <span style={{ color: '#ffaa00' }}>SUSPICIOUS</span>
-                      <span style={{ color: '#ff4444' }}>DANGEROUS</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
+                      <span style={{ color: '#00ff88', fontSize: '0.75rem' }}>SAFE</span>
+                      <span style={{ color: '#ffaa00', fontSize: '0.75rem' }}>SUSPICIOUS</span>
+                      <span style={{ color: '#ff4444', fontSize: '0.75rem' }}>DANGEROUS</span>
                     </div>
                   </div>
 
-                  {/* ── Detected Indicators (only if threat) ── */}
+                  {/* Threat Indicators */}
                   {isThreat && indicators.length > 0 && (
-                    <div className="res-indicators-section">
-                      <div className="res-section-title">DETECTED INDICATORS</div>
-                      <div className="res-indicators-list">
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ color: 'rgba(224,230,240,0.5)', fontSize: '0.75rem', letterSpacing: '2px', marginBottom: '12px' }}>DETECTED INDICATORS</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                         {indicators.map((ind, i) => (
-                          <span key={i} className="res-indicator-tag">
-                            ⚠️ {ind}
-                          </span>
+                          <span key={i} style={{
+                            background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.35)',
+                            color: '#ff8888', padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem'
+                          }}>⚠️ {ind}</span>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* ── Security Analysis ── */}
-                  <div className="res-analysis-section">
-                    <div className="res-section-title">SECURITY ANALYSIS</div>
-                    <div className="res-analysis-list">
-                      {secAnalysis.map((item, i) => (
-                        <div key={i} className="res-analysis-item">
-                          <span className="res-analysis-icon">{item.icon}</span>
-                          <span className="res-analysis-text">{item.text}</span>
-                          <span className={`res-badge ${item.badgeClass}`}>{item.badge}</span>
-                        </div>
-                      ))}
+                  {/* Safe Indicators */}
+                  {!isThreat && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ color: 'rgba(224,230,240,0.5)', fontSize: '0.75rem', letterSpacing: '2px', marginBottom: '12px' }}>POSITIVE INDICATORS</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {['Valid HTTPS', 'Trusted Domain', 'No Suspicious Patterns', 'Clean Content'].map((ind, i) => (
+                          <span key={i} style={{
+                            background: 'rgba(0,255,136,0.1)', border: '1px solid rgba(0,255,136,0.35)',
+                            color: '#00ff88', padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem'
+                          }}>✅ {ind}</span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* ── Confidence footer ── */}
-                  <div className="res-conf-footer">
+                  <div style={{ color: 'rgba(224,230,240,0.5)', fontSize: '0.85rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '14px' }}>
                     Model confidence: <strong style={{ color: '#00d4ff' }}>{result.confidence}%</strong>
                   </div>
                 </div>
               )}
+            </div>
+          )}
 
-              {result && !analyzing && result.result === 'Error' && (
-                <div className="res-threat" style={{ textAlign: 'center' }}>
-                  <div className="res-icon">❌</div>
-                  <div className="res-title threat">Analysis Failed</div>
-                  <div className="res-conf">Could not reach the server. Please try again.</div>
+          {/* SCAN HISTORY */}
+          {history.length > 0 && (
+            <div style={{ marginTop: '32px' }}>
+              <h4 style={{ fontFamily: 'Orbitron,monospace', color: '#00d4ff', fontSize: '1rem', marginBottom: '16px', borderTop: '1px solid rgba(0,212,255,0.15)', paddingTop: '24px' }}>
+                📋 Recent Scans ({history.length})
+              </h4>
+              {history.map((scan, index) => (
+                <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', border: '1px solid rgba(0,212,255,0.1)', borderRadius: '12px', marginBottom: '10px', background: 'rgba(255,255,255,0.02)', gap: '12px' }}>
+                  <span style={{ background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.3)', color: '#00d4ff', padding: '4px 10px', borderRadius: '20px', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                    {typeIcon[scan.type] || '🔍'} {scan.type}
+                  </span>
+                  <span style={{ color: 'rgba(224,230,240,0.6)', fontSize: '0.88rem', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                    {scan.input}
+                  </span>
+                  <span style={{ background: scan.is_threat ? 'rgba(255,68,68,0.15)' : 'rgba(0,255,136,0.1)', border: scan.is_threat ? '1px solid rgba(255,68,68,0.4)' : '1px solid rgba(0,255,136,0.4)', color: scan.is_threat ? '#ff6666' : '#00ff88', padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {scan.is_threat ? '⚠️ Threat' : '✅ Safe'}
+                  </span>
+                  <span style={{ color: '#00d4ff', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{scan.confidence}%</span>
+                  <span style={{ color: 'rgba(224,230,240,0.4)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{scan.timestamp}</span>
                 </div>
-              )}
+              ))}
             </div>
           )}
         </div>
       </section>
 
-      {/* FEATURES */}
       <section className="section" id="features">
         <div className="sec-head">
           <span className="sec-label">Capabilities</span>
@@ -468,55 +346,22 @@ export default function Dashboard() {
           <p>Powered by cutting-edge machine learning and comprehensive threat intelligence.</p>
         </div>
         <div className="grid-4">
-          <div className="glass-card feat-card">
-            <span className="feat-icon">🖥️</span>
-            <h3>AI-Powered Detection</h3>
-            <p>Deep learning models trained on millions of phishing samples.</p>
-          </div>
-          <div className="glass-card feat-card">
-            <span className="feat-icon">⚡</span>
-            <h3>Real-time Analysis</h3>
-            <p>Instant scanning with results in under 2 seconds.</p>
-          </div>
-          <div className="glass-card feat-card">
-            <span className="feat-icon">📊</span>
-            <h3>Multi-Threat Detection</h3>
-            <p>Detects URL, email, SMS and job posting scams.</p>
-          </div>
-          <div className="glass-card feat-card">
-            <span className="feat-icon">📋</span>
-            <h3>Explainable Results</h3>
-            <p>Clear confidence scores and threat explanations.</p>
-          </div>
+          <div className="glass-card feat-card"><span className="feat-icon">🖥️</span><h3>AI-Powered Detection</h3><p>Deep learning models trained on millions of phishing samples.</p></div>
+          <div className="glass-card feat-card"><span className="feat-icon">⚡</span><h3>Real-time Analysis</h3><p>Instant scanning with results in under 2 seconds.</p></div>
+          <div className="glass-card feat-card"><span className="feat-icon">📊</span><h3>Multi-Threat Detection</h3><p>Detects URL, email, SMS and job posting scams.</p></div>
+          <div className="glass-card feat-card"><span className="feat-icon">📋</span><h3>Scan History</h3><p>Every scan is saved and shown below the result automatically.</p></div>
         </div>
         <div className="glass-card stats-row">
-          <div className="stat-item">
-            <div className="stat-num grad-text">99.7%</div>
-            <div className="stat-lbl">Detection Accuracy</div>
-          </div>
-          <div className="stat-item">
-            <div className="stat-num" style={{ background: 'linear-gradient(135deg,#9b5de5,#c77dff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>1.2s</div>
-            <div className="stat-lbl">Avg. Scan Time</div>
-          </div>
-          <div className="stat-item">
-            <div className="stat-num" style={{ background: 'linear-gradient(135deg,#00ff88,#00cc6a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>10M+</div>
-            <div className="stat-lbl">URLs Analyzed</div>
-          </div>
-          <div className="stat-item">
-            <div className="stat-num" style={{ background: 'linear-gradient(135deg,#ffaa00,#ff8800)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>500K+</div>
-            <div className="stat-lbl">Threats Blocked</div>
-          </div>
+          <div className="stat-item"><div className="stat-num grad-text">99.7%</div><div className="stat-lbl">Detection Accuracy</div></div>
+          <div className="stat-item"><div className="stat-num" style={{ background: 'linear-gradient(135deg,#9b5de5,#c77dff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>1.2s</div><div className="stat-lbl">Avg. Scan Time</div></div>
+          <div className="stat-item"><div className="stat-num" style={{ background: 'linear-gradient(135deg,#00ff88,#00cc6a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>10M+</div><div className="stat-lbl">URLs Analyzed</div></div>
+          <div className="stat-item"><div className="stat-num" style={{ background: 'linear-gradient(135deg,#ffaa00,#ff8800)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>500K+</div><div className="stat-lbl">Threats Blocked</div></div>
         </div>
       </section>
 
-      {/* FOOTER */}
       <footer className="footer">
         <div className="foot-brand">🛡️ <span>ThreatLens</span></div>
-        <div className="foot-links">
-          <a href="#">Privacy Policy</a>
-          <a href="#">Terms of Service</a>
-          <a href="#">Contact</a>
-        </div>
+        <div className="foot-links"><a href="#">Privacy Policy</a><a href="#">Terms of Service</a><a href="#">Contact</a></div>
         <div className="foot-copy">© 2025 ThreatLens. All rights reserved.</div>
       </footer>
     </>

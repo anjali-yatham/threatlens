@@ -646,3 +646,63 @@ body::before {
   border-top: 1px solid rgba(255,255,255,0.06);
   padding-top: 12px;
 }
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 1px solid rgba(0,212,255,0.1);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  background: rgba(255,255,255,0.02);
+  transition: all 0.3s;
+  gap: 12px;
+}
+.history-item:hover {
+  border-color: rgba(0,212,255,0.3);
+  background: rgba(0,212,255,0.04);
+}
+.threat-badge {
+  background: rgba(255,68,68,0.15);
+  border: 1px solid rgba(255,68,68,0.4);
+  color: #ff6666;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.safe-badge {
+  background: rgba(0,255,136,0.1);
+  border: 1px solid rgba(0,255,136,0.4);
+  color: #00ff88;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.type-badge {
+  background: rgba(0,212,255,0.1);
+  border: 1px solid rgba(0,212,255,0.3);
+  color: #00d4ff;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.history-input {
+  color: rgba(224,230,240,0.6);
+  font-size: 0.88rem;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.history-time {
+  color: rgba(224,230,240,0.4);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}

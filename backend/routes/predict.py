@@ -8,8 +8,14 @@ import scipy.sparse as sp
 import numpy as np
 import jwt
 from dotenv import load_dotenv
+from datetime import datetime
+from pymongo import MongoClient
 
 load_dotenv()
+
+client = MongoClient(os.getenv("MONGO_URI"))
+db = client["threatlens"]
+scans = db["scans"]
 
 predict_bp = Blueprint("predict", __name__)
 
@@ -22,6 +28,25 @@ text_model = joblib.load(os.path.join(MODELS_DIR, 'text_model.pkl'))
 text_vectorizer = joblib.load(os.path.join(MODELS_DIR, 'text_vectorizer.pkl'))
 job_model = joblib.load(os.path.join(MODELS_DIR, 'job_model.pkl'))
 job_vectorizer = joblib.load(os.path.join(MODELS_DIR, 'job_vectorizer.pkl'))
+
+def save_scan(user_email, scan_type, input_text, result, confidence):
+    scans.insert_one({
+        "email": user_email,
+        "type": scan_type,
+        "input": input_text[:200],
+        "result": result,
+        "confidence": confidence,
+        "timestamp": datetime.utcnow(),
+        "is_threat": result in ["Phishing", "Spam/Phishing", "Fake"]
+    })
+
+def get_user_email(request):
+    token = request.headers.get("Authorization","...").replace("Bearer ","")
+    try:
+        data = jwt.decode(token, os.getenv("JWT_SECRET"), algorithms=["HS256"])
+        return data["email"]
+    except:
+        return None
 
 def check_auth(request):
     token = request.headers.get("Authorization","...").replace("Bearer ","")
@@ -70,39 +95,44 @@ def predict_url():
     is_legit = real_brand and url.startswith("https") and subdomain_count <= 1
 
     if is_phishing:
-        return jsonify({"result": "Phishing", "confidence": 95})
-    if is_legit:
-        return jsonify({"result": "Legitimate", "confidence": 97})
+        result, confidence = "Phishing", 95
+    elif is_legit:
+        result, confidence = "Legitimate", 97
+    else:
+        row = {col: 0 for col in url_columns}
+        row["URLLength"] = url_len
+        row["DomainLength"] = len(domain)
+        row["IsDomainIP"] = 1 if re.match(r"^\d+\.\d+\.\d+\.\d+$", domain) else 0
+        row["TLDLength"] = len(tld)
+        row["URLSimilarityIndex"] = 0 if (brand_in_domain and not real_brand) else 1
+        row["TLDLegitimateProb"] = 0.95 if tld in known_legit_tlds else (0.2 if tld in suspicious_tlds else 0.5)
+        row["URLCharProb"] = sum(c.isalnum() for c in url) / url_len
+        row["NoOfSubDomain"] = subdomain_count
+        row["HasObfuscation"] = 1 if ("%" in url or "@" in url) else 0
+        row["NoOfObfuscatedChar"] = url.count("%")
+        row["ObfuscationRatio"] = url.count("%") / url_len
+        row["NoOfLettersInURL"] = letters
+        row["LetterRatioInURL"] = letters / url_len
+        row["NoOfDegitsInURL"] = digits
+        row["DegitRatioInURL"] = digits / url_len
+        row["NoOfEqualsInURL"] = url.count("=")
+        row["NoOfQMarkInURL"] = url.count("?")
+        row["NoOfAmpersandInURL"] = url.count("&")
+        row["NoOfOtherSpecialCharsInURL"] = special_chars
+        row["SpacialCharRatioInURL"] = special_chars / url_len
+        row["IsHTTPS"] = 1 if url.startswith("https") else 0
+        row["DomainTitleMatchScore"] = 1.0 if real_brand else 0.0
+        row["URLTitleMatchScore"] = 1.0 if real_brand else 0.0
 
-    row = {col: 0 for col in url_columns}
-    row["URLLength"] = url_len
-    row["DomainLength"] = len(domain)
-    row["IsDomainIP"] = 1 if re.match(r"^\d+\.\d+\.\d+\.\d+$", domain) else 0
-    row["TLDLength"] = len(tld)
-    row["URLSimilarityIndex"] = 0 if (brand_in_domain and not real_brand) else 1
-    row["TLDLegitimateProb"] = 0.95 if tld in known_legit_tlds else (0.2 if tld in suspicious_tlds else 0.5)
-    row["URLCharProb"] = sum(c.isalnum() for c in url) / url_len
-    row["NoOfSubDomain"] = subdomain_count
-    row["HasObfuscation"] = 1 if ("%" in url or "@" in url) else 0
-    row["NoOfObfuscatedChar"] = url.count("%")
-    row["ObfuscationRatio"] = url.count("%") / url_len
-    row["NoOfLettersInURL"] = letters
-    row["LetterRatioInURL"] = letters / url_len
-    row["NoOfDegitsInURL"] = digits
-    row["DegitRatioInURL"] = digits / url_len
-    row["NoOfEqualsInURL"] = url.count("=")
-    row["NoOfQMarkInURL"] = url.count("?")
-    row["NoOfAmpersandInURL"] = url.count("&")
-    row["NoOfOtherSpecialCharsInURL"] = special_chars
-    row["SpacialCharRatioInURL"] = special_chars / url_len
-    row["IsHTTPS"] = 1 if url.startswith("https") else 0
-    row["DomainTitleMatchScore"] = 1.0 if real_brand else 0.0
-    row["URLTitleMatchScore"] = 1.0 if real_brand else 0.0
+        df = pd.DataFrame([row])[url_columns]
+        prediction = url_model.predict(df)[0]
+        confidence = int(max(url_model.predict_proba(df)[0]) * 100)
+        result = "Phishing" if prediction == 1 else "Legitimate"
 
-    df = pd.DataFrame([row])[url_columns]
-    prediction = url_model.predict(df)[0]
-    confidence = int(max(url_model.predict_proba(df)[0]) * 100)
-    result = "Phishing" if prediction == 1 else "Legitimate"
+    email = get_user_email(request)
+    if email:
+        save_scan(email, "URL", url, result, confidence)
+
     return jsonify({"result": result, "confidence": confidence})
 
 @predict_bp.route("/predict-email", methods=["POST"])
@@ -115,6 +145,11 @@ def predict_email():
     prediction = text_model.predict(transformed)[0]
     confidence = int(max(text_model.predict_proba(transformed)[0]) * 100)
     result = "Spam/Phishing" if prediction == 1 else "Legitimate"
+
+    email = get_user_email(request)
+    if email:
+        save_scan(email, "Email", text, result, confidence)
+
     return jsonify({"result": result, "confidence": confidence})
 
 @predict_bp.route("/predict-scam", methods=["POST"])
@@ -127,6 +162,11 @@ def predict_scam():
     prediction = text_model.predict(transformed)[0]
     confidence = int(max(text_model.predict_proba(transformed)[0]) * 100)
     result = "Spam/Phishing" if prediction == 1 else "Legitimate"
+
+    email = get_user_email(request)
+    if email:
+        save_scan(email, "Scam", text, result, confidence)
+
     return jsonify({"result": result, "confidence": confidence})
 
 @predict_bp.route("/predict-job", methods=["POST"])
@@ -146,4 +186,28 @@ def predict_job():
     prediction = job_model.predict(combined)[0]
     confidence = int(max(job_model.predict_proba(combined)[0]) * 100)
     result = "Fake" if prediction == 1 else "Legitimate"
+
+    email = get_user_email(request)
+    if email:
+        save_scan(email, "Job", text, result, confidence)
+
     return jsonify({"result": result, "confidence": confidence})
+
+@predict_bp.route("/history", methods=["GET"])
+def get_history():
+    token = request.headers.get("Authorization","...").replace("Bearer ","")
+    try:
+        data = jwt.decode(token, os.getenv("JWT_SECRET"), algorithms=["HS256"])
+        email = data["email"]
+    except:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    history = list(scans.find(
+        {"email": email},
+        {"_id": 0}
+    ).sort("timestamp", -1).limit(20))
+
+    for scan in history:
+        scan["timestamp"] = scan["timestamp"].strftime("%d %b %Y %I:%M %p")
+
+    return jsonify(history)
