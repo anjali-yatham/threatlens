@@ -9,7 +9,18 @@ export default function LandingPage() {
       p.className = 'particle'
       const size = Math.random() * 3 + 1
       const color = Math.random() > 0.5 ? '#00d4ff' : '#7b2fff'
-      p.style.cssText = `left:${Math.random()*100}%;width:${size}px;height:${size}px;background:${color};box-shadow:0 0 ${size*2}px ${color};animation-duration:${Math.random()*14+8}s;animation-delay:-${Math.random()*14}s;`
+      p.style.position = 'fixed'
+      p.style.left = Math.random() * 100 + '%'
+      p.style.bottom = '-10px'
+      p.style.width = size + 'px'
+      p.style.height = size + 'px'
+      p.style.background = color
+      p.style.borderRadius = '50%'
+      p.style.boxShadow = '0 0 ' + (size * 2) + 'px ' + color
+      p.style.pointerEvents = 'none'
+      p.style.zIndex = '0'
+      p.style.animation = 'floatUp ' + (Math.random() * 14 + 8) + 's linear infinite'
+      p.style.animationDelay = '-' + (Math.random() * 14) + 's'
       document.body.appendChild(p)
       particles.push(p)
     }
@@ -18,9 +29,6 @@ export default function LandingPage() {
 
   return (
     <>
-      <style>
-        {`.corner { display: none; }`}
-      </style>
       <div className="corner corner-tl" />
       <div className="corner corner-tr" />
       <div className="corner corner-bl" />
