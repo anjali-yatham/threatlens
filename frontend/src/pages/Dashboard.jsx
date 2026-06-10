@@ -74,12 +74,9 @@ export default function Dashboard() {
 
   const barColor = riskScore >= 75 ? '#ff4444' : riskScore >= 40 ? '#ffaa00' : '#00ff88'
   const typeIcon = { URL: '🔗', Email: '📧', Scam: '⚠️', Job: '💼' }
-  const indicatorMap = {
-    'Phishing':      ['Suspicious TLD Detected', 'Brand Impersonation', 'No HTTPS Encryption', 'Malicious Domain Pattern'],
-    'Spam/Phishing': ['Urgency Language Detected', 'Prize/Lottery Scam Pattern', 'Request for Personal Info', 'Suspicious Links Found'],
-    'Fake':          ['Upfront Fee Required', 'Unrealistic Salary Offered', 'No Company Information', 'Suspicious Contact Method'],
-  }
-  const indicators = result ? (indicatorMap[result.result] || []) : []
+  
+  // Use indicators from backend API response, or fallback to empty array
+  const indicators = result?.indicators || []
 
   return (
     <>
@@ -285,21 +282,6 @@ export default function Dashboard() {
                             background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.35)',
                             color: '#ff8888', padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem'
                           }}>⚠️ {ind}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Safe Indicators */}
-                  {!isThreat && (
-                    <div style={{ marginBottom: '16px' }}>
-                      <div style={{ color: 'rgba(224,230,240,0.5)', fontSize: '0.75rem', letterSpacing: '2px', marginBottom: '12px' }}>POSITIVE INDICATORS</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {['Valid HTTPS', 'Trusted Domain', 'No Suspicious Patterns', 'Clean Content'].map((ind, i) => (
-                          <span key={i} style={{
-                            background: 'rgba(0,255,136,0.1)', border: '1px solid rgba(0,255,136,0.35)',
-                            color: '#00ff88', padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem'
-                          }}>✅ {ind}</span>
                         ))}
                       </div>
                     </div>
