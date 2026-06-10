@@ -31,6 +31,12 @@ text_vectorizer = joblib.load(os.path.join(MODELS_DIR, 'text_vectorizer.pkl'))
 job_model = joblib.load(os.path.join(MODELS_DIR, 'job_model.pkl'))
 job_vectorizer = joblib.load(os.path.join(MODELS_DIR, 'job_vectorizer.pkl'))
 
+# Load optimal threshold for job model (default to 0.5 if not found)
+try:
+    job_threshold = joblib.load(os.path.join(MODELS_DIR, 'job_threshold.pkl'))
+except:
+    job_threshold = 0.5  # Default threshold
+
 def save_scan(user_email, scan_type, input_text, result, confidence):
     scans.insert_one({
         "email": user_email,
@@ -306,6 +312,63 @@ def predict_scam():
         "indicators": indicators
     })
 
+def extract_job_features(text_lower, original_text, vectorizer):
+    """Extract enhanced features for job posting classification"""
+    # TF-IDF features
+    tfidf_features = vectorizer.transform([text_lower])
+    
+    # Original 5 features
+    has_pay_fee = 1 if any(w in text_lower for w in ['fee', 'registration', 'deposit', 'pay', 'payment', 'refundable']) else 0
+    has_unrealistic_salary = 1 if any(w in text_lower for w in ['100000', '50000', 'lakh', 'crore']) else 0
+    has_suspicious_words = 1 if any(w in text_lower for w in ['whatsapp', 'aadhar', 'urgent', 'guaranteed', 'telegram']) else 0
+    has_no_company = 1 if len(text_lower.strip()) < 100 else 0
+    has_email_in_post = 1 if any(domain in text_lower for domain in ['@gmail', '@yahoo', '@hotmail']) else 0
+    
+    # New structural features
+    text_length = len(original_text)
+    word_count = len(text_lower.split())
+    avg_word_length = np.mean([len(w) for w in text_lower.split()]) if text_lower.split() else 0
+    has_company_profile = 1 if text_length > 300 else 0
+    has_requirements = 1 if any(word in text_lower for word in ['experience', 'skills', 'qualification', 'required']) else 0
+    has_benefits = 1 if any(word in text_lower for word in ['benefits', 'insurance', '401k', 'vacation', 'pto']) else 0
+    has_salary_range = 1 if any(word in text_lower for word in ['salary', 'lpa', 'usd', 'inr', 'annual', 'per month']) else 0
+    
+    # Linguistic features
+    urgency_words = ['urgent', 'immediately', 'asap', 'hurry', 'quick', 'fast', 'now', 'today', 'limited']
+    urgency_count = sum(1 for w in urgency_words if w in text_lower)
+    money_words = ['earn', 'income', 'salary', 'paid', 'money', 'cash', 'payment', 'profit']
+    money_mention_count = sum(1 for w in money_words if w in text_lower)
+    caps_ratio = sum(1 for c in original_text if c.isupper()) / max(len(original_text), 1)
+    exclamation_count = original_text.count('!')
+    
+    # Contact method features
+    has_social_contact = 1 if any(platform in text_lower for platform in ['whatsapp', 'telegram', 'wechat', 'viber']) else 0
+    personal_domains = ['gmail', 'yahoo', 'hotmail', 'outlook', 'aol', 'mail']
+    personal_email_count = sum(1 for domain in personal_domains if f'@{domain}' in text_lower)
+    
+    # Scam pattern features
+    no_experience = 1 if 'no experience' in text_lower or 'no qualification' in text_lower else 0
+    work_from_home = 1 if 'work from home' in text_lower or 'remote work' in text_lower else 0
+    guaranteed_income = 1 if 'guaranteed' in text_lower and any(w in text_lower for w in ['income', 'salary', 'earn', 'money']) else 0
+    
+    # Compound features
+    fee_and_social = 1 if has_pay_fee and has_social_contact else 0
+    fee_and_urgency = 1 if has_pay_fee and urgency_count > 0 else 0
+    
+    # Create feature array (ORDER MUST MATCH TRAINING!)
+    manual_features = np.array([[
+        has_pay_fee, has_unrealistic_salary, has_suspicious_words, has_no_company, has_email_in_post,
+        text_length, word_count, avg_word_length, has_company_profile, has_requirements,
+        has_benefits, has_salary_range, urgency_count, money_mention_count, caps_ratio,
+        exclamation_count, has_social_contact, personal_email_count, no_experience, work_from_home,
+        guaranteed_income, fee_and_social, fee_and_urgency
+    ]])
+    
+    # Combine features
+    manual_sparse = sp.csr_matrix(manual_features)
+    combined = sp.hstack([tfidf_features, manual_sparse])
+    return combined
+
 @predict_bp.route("/predict-job", methods=["POST"])
 def predict_job():
     if not check_auth(request):
@@ -316,31 +379,52 @@ def predict_job():
     # Detect language and translate if needed
     translated_text, detected_lang, was_translated = detect_and_translate(text)
     
-    # Use translated text for prediction (lowercase for job model)
+    # Extract features
+    original_text = translated_text
     text_lower = translated_text.lower()
-    tfidf_features = job_vectorizer.transform([text_lower])
-    has_pay_fee = 1 if any(w in text_lower for w in ["fee","registration","deposit","pay","payment","refundable"]) else 0
-    has_unrealistic = 1 if any(w in text_lower for w in ["100000","50000","lakh","crore"]) else 0
-    has_suspicious = 1 if any(w in text_lower for w in ["whatsapp","aadhar","urgent","guaranteed"]) else 0
-    has_no_company = 1 if len(text_lower.strip()) < 100 else 0
-    has_email = 1 if ("@gmail" in text_lower or "@yahoo" in text_lower or "@hotmail" in text_lower) else 0
-    manual = sp.csr_matrix(np.array([[has_pay_fee, has_unrealistic, has_suspicious, has_no_company, has_email]]))
-    combined = sp.hstack([tfidf_features, manual])
-    prediction = job_model.predict(combined)[0]
-    confidence = int(max(job_model.predict_proba(combined)[0]) * 100)
+    combined = extract_job_features(text_lower, original_text, job_vectorizer)
+    
+    # Predict using optimal threshold
+    proba = job_model.predict_proba(combined)[0]
+    prediction = 1 if proba[1] >= job_threshold else 0
+    
+    # Debug logging
+    print(f"\n[JOB PREDICTION DEBUG]")
+    print(f"Probabilities: [Legit: {proba[0]:.4f}, Fake: {proba[1]:.4f}]")
+    print(f"Threshold: {job_threshold:.4f}")
+    print(f"Prediction: {prediction} ({'Fake' if prediction == 1 else 'Legitimate'})")
+    
+    # FIXED: Confidence should be the probability of the predicted class
+    if prediction == 1:  # Fake
+        confidence = int(proba[1] * 100)  # Probability of being fake
+    else:  # Legitimate
+        confidence = int(proba[0] * 100)  # Probability of being legitimate
+    
     result = "Fake" if prediction == 1 else "Legitimate"
+    
+    print(f"Result: {result}, Confidence: {confidence}%")
+    
+    # Extract basic features for rule-based checks
+    has_pay_fee = 1 if any(w in text_lower for w in ['fee', 'registration', 'deposit', 'pay ', 'payment', 'refundable']) else 0
+    has_social_contact = 1 if any(platform in text_lower for platform in ['whatsapp', 'telegram', 'wechat', 'viber']) else 0
     
     # Rule-based override: Strong fake indicators should force fake classification
     strong_fake_indicators = [
         ("registration fee" in text_lower or "verification fee" in text_lower or "document fee" in text_lower),
         ("refundable fee" in text_lower or "security deposit" in text_lower or "processing fee" in text_lower),
-        (has_pay_fee == 1 and has_suspicious == 1),  # Fee + suspicious contact method
+        (has_pay_fee == 1 and has_social_contact == 1),  # FIXED: Fee + suspicious contact method
         ("whatsapp" in text_lower and "fee" in text_lower),  # WhatsApp + fee is always suspicious
+        # Unrealistic intern stipend + urgency + no experience
+        (any(amt in original_text for amt in ["₹35", "₹40", "₹45", "₹50", "35000", "40000", "45000", "50000", "35,000", "40,000", "45,000", "50,000"]) and
+         ("intern" in text_lower or "internship" in text_lower) and
+         ("no experience" in text_lower or "no prior experience" in text_lower) and
+         ("24 hours" in text_lower or "limited positions" in text_lower or "urgent" in text_lower)),
     ]
     
     if any(strong_fake_indicators):
         result = "Fake"
-        confidence = max(confidence, 75)  # Boost confidence to at least 75%
+        confidence = max(confidence, 85)  # Boost confidence to at least 85%
+        print(f"[RULE-BASED OVERRIDE] Forced Fake classification, confidence boosted to {confidence}%")
     
     # Extract and check URLs in job posting
     url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
@@ -376,7 +460,11 @@ def predict_job():
             if any(suspicious_url_patterns):
                 result = "Fake"
                 confidence = max(confidence, 80)
+                print(f"[URL-BASED OVERRIDE] Suspicious URL detected, forced Fake classification")
                 break
+    
+    print(f"[FINAL RESULT] {result}, Confidence: {confidence}%")
+    print(f"[END DEBUG]\n")
     
     # Analyze threat indicators from translated text
     indicators = analyze_threat_indicators(translated_text) if result == "Fake" else []

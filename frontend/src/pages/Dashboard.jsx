@@ -65,12 +65,18 @@ export default function Dashboard() {
 
   const isThreat = result && ['Phishing', 'Spam/Phishing', 'Fake'].includes(result.result)
 
-  // ✅ FIXED: risk score = confidence for threats, low value for safe results
+  // FIXED: Calculate risk score properly
+  // For threats: high model confidence = high risk
+  // For safe: low model confidence = high risk (uncertainty is risky!)
   const riskScore = result
     ? isThreat
-      ? result.confidence
-      : Math.max(1, 100 - result.confidence)
+      ? result.confidence  // Threat: confidence in threat = risk score
+      : Math.max(1, 100 - result.confidence)  // Safe: low confidence in safety = high risk
     : 0
+
+  // FIXED: Determine actual safety based on risk score, not just the label
+  // Even if backend says "Legitimate", if confidence is very low, it's risky
+  const isSafe = riskScore < 40  // Risk < 40% is actually safe
 
   const barColor = riskScore >= 75 ? '#ff4444' : riskScore >= 40 ? '#ffaa00' : '#00ff88'
   const typeIcon = { URL: '🔗', Email: '📧', Scam: '⚠️', Job: '💼' }
@@ -227,21 +233,23 @@ export default function Dashboard() {
               )}
               {result && !analyzing && (
                 <div style={{
-                  background: isThreat ? 'rgba(255,68,68,0.07)' : 'rgba(0,255,136,0.07)',
-                  border: isThreat ? '1px solid rgba(255,68,68,0.35)' : '1px solid rgba(0,255,136,0.35)',
+                  background: !isSafe ? 'rgba(255,68,68,0.07)' : 'rgba(0,255,136,0.07)',
+                  border: !isSafe ? '1px solid rgba(255,68,68,0.35)' : '1px solid rgba(0,255,136,0.35)',
                   borderRadius: '18px', padding: '28px',
-                  boxShadow: isThreat ? '0 0 30px rgba(255,68,68,0.1)' : '0 0 30px rgba(0,255,136,0.08)'
+                  boxShadow: !isSafe ? '0 0 30px rgba(255,68,68,0.1)' : '0 0 30px rgba(0,255,136,0.08)'
                 }}>
                   {/* Header Row */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <span style={{ fontSize: '2rem' }}>{isThreat ? '⚠️' : '✅'}</span>
+                      <span style={{ fontSize: '2rem' }}>{!isSafe ? '⚠️' : '✅'}</span>
                       <div>
-                        <div style={{ fontFamily: 'Orbitron,monospace', fontSize: '1.3rem', fontWeight: 700, color: isThreat ? '#ff4444' : '#00ff88' }}>
-                          {isThreat ? 'THREAT DETECTED' : 'SAFE'}
+                        <div style={{ fontFamily: 'Orbitron,monospace', fontSize: '1.3rem', fontWeight: 700, color: !isSafe ? '#ff4444' : '#00ff88' }}>
+                          {!isSafe ? 'THREAT DETECTED' : 'SAFE'}
                         </div>
                         <div style={{ color: 'rgba(224,230,240,0.6)', fontSize: '0.9rem', marginTop: '4px' }}>
-                          {isThreat ? 'Potential threat indicators detected — proceed with caution' : `${result.result} — no threats found`}
+                          {!isSafe 
+                            ? `${result.result} detected — proceed with caution` 
+                            : `${result.result} — no significant threats found`}
                         </div>
                       </div>
                     </div>
@@ -273,7 +281,7 @@ export default function Dashboard() {
                   </div>
 
                   {/* Threat Indicators */}
-                  {isThreat && indicators.length > 0 && (
+                  {!isSafe && indicators.length > 0 && (
                     <div style={{ marginBottom: '16px' }}>
                       <div style={{ color: 'rgba(224,230,240,0.5)', fontSize: '0.75rem', letterSpacing: '2px', marginBottom: '12px' }}>DETECTED INDICATORS</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
