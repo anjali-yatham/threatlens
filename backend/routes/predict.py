@@ -134,9 +134,14 @@ def analyze_threat_indicators(text):
     if any(word in text_lower for word in ['refund', 'cashback', 'reward', 'money back']):
         indicators.append('Promises Money/Refund')
     
-    # Suspicious links and contact
-    if any(word in text_lower for word in ['click here', 'apply here', 'link', 'http', 'bit.ly', 'tinyurl']):
+    # Suspicious links and contact - FIXED: Only check for actual URLs/link text
+    # Check for actual URLs (http/https) or link shorteners
+    if any(word in text_lower for word in ['http://', 'https://', 'bit.ly', 'tinyurl', 'goo.gl', 'ow.ly', 'short.link']):
         indicators.append('Contains Suspicious Links')
+    # Check for "click here" or "click link" phrases (not just the word "link")
+    elif any(phrase in text_lower for phrase in ['click here', 'click link', 'tap link', 'open link', 'visit link']):
+        indicators.append('Contains Suspicious Links')
+    
     if any(word in text_lower for word in ['whatsapp', 'telegram', 'call us', 'contact us']):
         indicators.append('Suspicious Contact Method')
     
@@ -168,26 +173,54 @@ def predict_url():
     tld = domain.split(".")[-1] if "." in domain else ""
 
     known_legit_tlds = ["com","org","net","edu","gov","in","uk","co"]
-    suspicious_tlds = ["xyz","top","click","loan","win","gq","tk","ml","cf","io"]
-    trusted_brands = ["google","facebook","instagram","amazon","microsoft",
-                      "apple","paypal","twitter","youtube","linkedin","github"]
-
+    suspicious_tlds = ["xyz","top","click","loan","win","gq","tk","ml","cf","io","info","biz","pw","cc"]
+    
+    # Expanded brand list - financial institutions, tech companies, popular services
+    trusted_brands = [
+        # Tech companies
+        "google","facebook","instagram","amazon","microsoft","apple","paypal",
+        "twitter","youtube","linkedin","github","netflix","spotify","dropbox",
+        # Banks (Indian) - NOTE: "axis" removed to avoid false positives, use "axisbank"
+        "sbi","hdfc","icici","axisbank","kotak","pnb","unionbank","bankofbaroda",
+        "canarabank","idbi","indusind","yesbank",
+        # Banks (International)
+        "chase","wellsfargo","bankofamerica","citibank","hsbc","barclays",
+        # Payment services
+        "paytm","googlepay","phonepe","stripe","razorpay",
+        # E-commerce
+        "flipkart","myntra","snapdeal","ebay","alibaba",
+        # Government
+        "uidai","incometax","gst","epfo",
+    ]
+    
+    # Check if domain contains brand keywords (more sophisticated)
     brand_in_domain = any(b in domain for b in trusted_brands)
     real_brand = any(
-        domain == b + "." + t or domain.endswith("." + b + "." + t)
-        for b in trusted_brands for t in ["com","org","net","in","co.in","co.uk"]
+        domain == b + "." + t or domain.endswith("." + b + "." + t) or
+        domain == "www." + b + "." + t  # Handle www prefix
+        for b in trusted_brands for t in ["com","org","net","in","co.in","co.uk","gov.in"]
     )
+    
+    # Additional phishing indicators for financial/government sites
+    financial_keywords = ["bank","verify","account","secure","login","signin","confirm","update","suspended"]
+    has_financial_keywords = any(keyword in domain for keyword in financial_keywords)
+    
+    # Hyphen count (excessive hyphens are suspicious)
+    hyphen_count = domain.count("-")
+    
     subdomain_count = max(len(domain.split(".")) - 2, 0)
     special_chars = sum(1 for c in url if c in "-_~%@!$#")
     letters = sum(c.isalpha() for c in url)
     digits = sum(c.isdigit() for c in url)
-
+    
     is_phishing = (
         re.match(r"^\d+\.\d+\.\d+\.\d+$", domain) or
         (brand_in_domain and not real_brand) or
         subdomain_count >= 3 or
-        tld in ["tk","ml","cf","gq"] or
-        "@" in url or url.count(".") > 6
+        tld in suspicious_tlds or  # Includes .info, .biz now
+        "@" in url or url.count(".") > 6 or
+        hyphen_count >= 2 or  # Multiple hyphens suspicious
+        (has_financial_keywords and tld not in ["com","in","co.in","gov","gov.in","org"])  # Financial keywords with suspicious TLD
     )
     is_legit = real_brand and url.startswith("https") and subdomain_count <= 1
 
@@ -223,7 +256,14 @@ def predict_url():
 
         df = pd.DataFrame([row])[url_columns]
         prediction = url_model.predict(df)[0]
-        confidence = int(max(url_model.predict_proba(df)[0]) * 100)
+        proba = url_model.predict_proba(df)[0]
+        
+        # FIXED: Confidence should be the probability of the PREDICTED class
+        if prediction == 1:  # Phishing
+            confidence = int(proba[1] * 100)
+        else:  # Legitimate
+            confidence = int(proba[0] * 100)
+        
         result = "Phishing" if prediction == 1 else "Legitimate"
 
     email = get_user_email(request)
@@ -245,6 +285,12 @@ def predict_url():
             indicators.append('Excessive Subdomains')
         if "@" in url:
             indicators.append('URL Obfuscation Detected')
+        if hyphen_count >= 2:
+            indicators.append('Multiple Hyphens in Domain')
+        if has_financial_keywords and tld not in ["com","in","co.in","gov","gov.in"]:
+            indicators.append('Financial Keywords with Suspicious TLD')
+        if any(keyword in domain for keyword in ["verify","account","secure","login","update"]):
+            indicators.append('Suspicious Authentication Keywords')
         if not indicators:
             indicators.append('Malicious Domain Pattern')
     
@@ -264,10 +310,33 @@ def predict_email():
     # Detect language and translate if needed
     translated_text, detected_lang, was_translated = detect_and_translate(text)
     
-    # Use translated text for prediction
-    transformed = text_vectorizer.transform([translated_text])
+    # Debug logging
+    if was_translated:
+        print(f"[EMAIL TRANSLATION] Detected language: {detected_lang}")
+        print(f"[EMAIL TRANSLATION] Original: {text[:100]}")
+        print(f"[EMAIL TRANSLATION] Translated: {translated_text[:100]}")
+    
+    # CRITICAL FIX: Preprocess text to match training preprocessing
+    import string
+    text_clean = translated_text.lower()
+    text_clean = text_clean.translate(str.maketrans('', '', string.punctuation))
+    # Note: Stopword removal is NOT needed here as TF-IDF will handle it
+    
+    print(f"[EMAIL PREPROCESSED] {text_clean[:100]}")
+    
+    # Use preprocessed text for prediction
+    transformed = text_vectorizer.transform([text_clean])
     prediction = text_model.predict(transformed)[0]
-    confidence = int(max(text_model.predict_proba(transformed)[0]) * 100)
+    proba = text_model.predict_proba(transformed)[0]
+    
+    print(f"[EMAIL PREDICTION] Class: {prediction}, Probabilities: {proba}")
+    
+    # FIXED: Confidence should be the probability of the PREDICTED class
+    if prediction == 1:  # Spam/Phishing
+        confidence = int(proba[1] * 100)  # Probability of spam class
+    else:  # Legitimate
+        confidence = int(proba[0] * 100)  # Probability of legitimate class
+    
     result = "Spam/Phishing" if prediction == 1 else "Legitimate"
     
     # Analyze threat indicators from translated text
@@ -293,10 +362,32 @@ def predict_scam():
     # Detect language and translate if needed
     translated_text, detected_lang, was_translated = detect_and_translate(text)
     
-    # Use translated text for prediction
-    transformed = text_vectorizer.transform([translated_text])
+    # Debug logging
+    if was_translated:
+        print(f"[TRANSLATION] Detected language: {detected_lang}")
+        print(f"[TRANSLATION] Original: {text[:100]}")
+        print(f"[TRANSLATION] Translated: {translated_text[:100]}")
+    
+    # CRITICAL FIX: Preprocess text to match training preprocessing
+    import string
+    text_clean = translated_text.lower()
+    text_clean = text_clean.translate(str.maketrans('', '', string.punctuation))
+    
+    print(f"[PREPROCESSED] {text_clean[:100]}")
+    
+    # Use preprocessed text for prediction
+    transformed = text_vectorizer.transform([text_clean])
     prediction = text_model.predict(transformed)[0]
-    confidence = int(max(text_model.predict_proba(transformed)[0]) * 100)
+    proba = text_model.predict_proba(transformed)[0]
+    
+    print(f"[PREDICTION] Class: {prediction}, Probabilities: {proba}")
+    
+    # FIXED: Confidence should be the probability of the PREDICTED class
+    if prediction == 1:  # Spam/Phishing
+        confidence = int(proba[1] * 100)  # Probability of spam class
+    else:  # Legitimate
+        confidence = int(proba[0] * 100)  # Probability of legitimate class
+    
     result = "Spam/Phishing" if prediction == 1 else "Legitimate"
     
     # Analyze threat indicators from translated text
@@ -497,3 +588,20 @@ def get_history():
         scan["timestamp"] = scan["timestamp"].strftime("%d %b %Y %I:%M %p")
 
     return jsonify(history)
+
+@predict_bp.route("/history", methods=["DELETE"])
+def clear_history():
+    token = request.headers.get("Authorization","...").replace("Bearer ","")
+    try:
+        data = jwt.decode(token, os.getenv("JWT_SECRET"), algorithms=["HS256"])
+        email = data["email"]
+    except:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    # Delete all scans for this user
+    result = scans.delete_many({"email": email})
+    
+    return jsonify({
+        "message": "History cleared successfully",
+        "deleted_count": result.deleted_count
+    }), 200

@@ -38,6 +38,26 @@ export default function Dashboard() {
     .catch(err => console.error('History error:', err))
   }
 
+  const clearHistory = () => {
+    if (!confirm('Are you sure you want to clear all scan history? This cannot be undone.')) {
+      return
+    }
+    
+    const token = localStorage.getItem('token')
+    if (!token) return
+    
+    fetch('http://localhost:5000/api/history', {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token }
+    })
+    .then(r => r.json())
+    .then(data => {
+      console.log('History cleared:', data)
+      setHistory([])
+    })
+    .catch(err => console.error('Clear history error:', err))
+  }
+
   const analyzeContent = (type) => {
     const inputs = { url: urlInput, email: emailInput, scam: scamInput, job: jobInput }
     const endpoints = {
@@ -306,9 +326,33 @@ export default function Dashboard() {
           {/* SCAN HISTORY */}
           {history.length > 0 && (
             <div style={{ marginTop: '32px' }}>
-              <h4 style={{ fontFamily: 'Orbitron,monospace', color: '#00d4ff', fontSize: '1rem', marginBottom: '16px', borderTop: '1px solid rgba(0,212,255,0.15)', paddingTop: '24px' }}>
-                📋 Recent Scans ({history.length})
-              </h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(0,212,255,0.15)', paddingTop: '24px', marginBottom: '16px' }}>
+                <h4 style={{ fontFamily: 'Orbitron,monospace', color: '#00d4ff', fontSize: '1rem', margin: 0 }}>
+                  📋 Recent Scans ({history.length})
+                </h4>
+                <button 
+                  onClick={clearHistory}
+                  style={{
+                    background: 'rgba(255,68,68,0.1)',
+                    border: '1px solid rgba(255,68,68,0.35)',
+                    color: '#ff7777',
+                    borderRadius: '10px',
+                    padding: '8px 16px',
+                    cursor: 'pointer',
+                    fontFamily: 'Rajdhani, sans-serif',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.3s'
+                  }}
+                  onMouseOver={(e) => e.target.style.background = 'rgba(255,68,68,0.2)'}
+                  onMouseOut={(e) => e.target.style.background = 'rgba(255,68,68,0.1)'}
+                >
+                  🗑️ Clear History
+                </button>
+              </div>
               {history.map((scan, index) => (
                 <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', border: '1px solid rgba(0,212,255,0.1)', borderRadius: '12px', marginBottom: '10px', background: 'rgba(255,255,255,0.02)', gap: '12px' }}>
                   <span style={{ background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.3)', color: '#00d4ff', padding: '4px 10px', borderRadius: '20px', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>

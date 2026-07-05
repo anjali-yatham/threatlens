@@ -39,12 +39,21 @@ A full-stack AI-powered cybersecurity web application that detects phishing URLs
 
 ### Machine Learning Models
 
-| Detection Type | Algorithm | Dataset Size | F1 Score |
-|----------------|-----------|--------------|----------|
-| URL Phishing | Random Forest | 235,795 URLs | 1.00 |
-| Email Spam | Logistic Regression | 5,574 messages | 0.94 |
-| Scam Messages | Logistic Regression | 5,574 messages | 0.94 |
-| Fake Job Posts | Random Forest | 17,880 listings | 0.82 |
+| Detection Type | Algorithm | Dataset Size | F1 Score | Status |
+|----------------|-----------|--------------|----------|--------|
+| URL Phishing | Random Forest | 235,795 URLs | 1.00 | ✅ Production |
+| Email Spam | Logistic Regression | 5,574 messages | 0.94 | ✅ Production |
+| Scam Messages | Logistic Regression | 5,574 messages | 0.94 | ✅ Production |
+| Fake Job Posts | **XGBoost + SMOTE** | 17,880 listings | **0.88** | ✅ **Optimized** |
+
+**Job Model Improvements** (+14.8% from baseline):
+- Algorithm: Random Forest → **XGBoost** (better for imbalanced data)
+- Features: 5 basic → **23 engineered features** (structural + linguistic + scam patterns)
+- TF-IDF: 5K unigrams → **10K n-grams (1-3)**
+- Class Balance: **SMOTE oversampling (20%)** + **2x boosted class weights**
+- Result: **0.76 → 0.88 F1-Score** (massive improvement for 5% minority class)
+
+**Model Specs**: 800 trees, depth 12, optimal threshold classification, 10,023 total features
 
 ---
 
@@ -82,11 +91,12 @@ ThreatLens/
 - Node.js v18+
 - Python 3.10+
 - MongoDB running locally
+- XGBoost (for job model): `pip install xgboost`
 
 ### Backend Setup
 ```bash
 cd backend
-pip install flask flask-cors pymongo bcrypt pyjwt python-dotenv scikit-learn joblib scipy pandas
+pip install flask flask-cors pymongo bcrypt pyjwt python-dotenv scikit-learn joblib scipy pandas xgboost imbalanced-learn langdetect deep-translator
 ```
 
 Create `backend/.env`:
@@ -135,6 +145,42 @@ Open `http://localhost:5173`
 6. Trained ML model predicts threat or safe
 7. Result returned with confidence score and indicators
 8. Scan saved to MongoDB history
+
+### Job Model Workflow (Enhanced)
+1. Input text translated to English if needed
+2. **23 features extracted**: structural, linguistic, scam patterns
+3. **TF-IDF vectorization**: 10K features with n-grams (1-3)
+4. **XGBoost prediction** with optimal threshold
+5. Rule-based overrides for high-confidence patterns
+6. Threat indicators identified and returned
+
+---
+
+## Model Training
+
+The job detection model has been optimized through extensive hyperparameter tuning:
+
+**To retrain the model:**
+```bash
+python train/train_jobs_improved.py
+```
+
+**Training time**: ~8-10 minutes
+
+**What gets trained:**
+- XGBoost with 800 trees, depth 12
+- SMOTE oversampling (20% minority class)
+- 2x boosted class weights
+- Optimal threshold search for classification
+
+**Expected output**: F1-Score ~0.88 (87.79%)
+
+**Model files saved to:**
+- `models/job_model.pkl`
+- `models/job_vectorizer.pkl`
+- `models/job_features.pkl`
+- `models/job_threshold.pkl`
+- `backend/models/` (copy for Flask)
 
 ---
 

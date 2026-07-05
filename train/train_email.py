@@ -20,8 +20,9 @@ sms = sms[['label', 'message']]
 sms = sms[sms['label'].isin(['ham', 'spam'])]
 sms['label'] = sms['label'].map({'ham': 0, 'spam': 1})
 
-# Add phishing and legitimate examples
+# Add phishing and legitimate examples - EXPANDED AND MORE DIVERSE
 phishing_texts = [
+    # English phishing patterns
     "Your account suspended verify credit card paypal immediately click here",
     "URGENT you won cash prize send bank account OTP immediately",
     "Dear customer unusual activity detected enter credentials to restore",
@@ -32,8 +33,32 @@ phishing_texts = [
     "Security alert gmail account accessed unknown device verify now",
     "Your SBI account blocked update KYC details immediately suspension",
     "Congratulations lottery winner send bank details claim reward now",
+    
+    # More varied phishing patterns
+    "You have won lottery prize claim now send details immediately",
+    "Bank account will be closed verify identity send documents today",
+    "Payment failed update card information click link urgent action",
+    "Tax refund approved deposit pending confirm bank details now",
+    "Prize money waiting for you provide account number claim today",
+    "Account locked suspicious activity verify credentials immediately restore",
+    "Congratulations selected for reward send personal information claim",
+    "Urgent security alert update password click here verify account",
+    "You won free iPhone claim prize send shipping details now",
+    "Bank card blocked unusual transaction verify OTP immediately unblock",
+    
+    # Job scam patterns
+    "Easy money work from home no experience pay small fee start",
+    "Earn thousands weekly part time job pay registration deposit today",
+    "Data entry online earn daily pay activation fee get started",
+    
+    # Prize/lottery in different phrasings
+    "Congratulations you have been selected winner claim your reward",
+    "Lucky draw winner you won lakhs of rupees send details",
+    "You are jackpot winner claim prize money send bank account",
 ]
+
 legitimate_texts = [
+    # Normal communications
     "Hi meeting confirmed for tomorrow at 3pm please bring the report",
     "Hey are you coming to college tomorrow assignment deadline reminder",
     "Team lunch scheduled Friday 1pm office cafeteria please confirm attendance",
@@ -44,11 +69,23 @@ legitimate_texts = [
     "Salary credited to account for March please check bank statement",
     "Office closed Monday public holiday normal operations resume Tuesday",
     "Your appointment confirmed tomorrow 2pm please arrive 10 minutes early",
+    
+    # More legitimate patterns
+    "Meeting rescheduled to next week will send calendar invite",
+    "Project deadline extended by three days team notification",
+    "Your package delivered check mailbox or reception desk",
+    "Reminder doctor appointment scheduled for Friday morning",
+    "Class timing changed new schedule starts next Monday",
+    "Your application received will contact within five business days",
+    "Thank you for your purchase receipt attached email",
+    "Webinar registration confirmed link will be sent day before",
+    "Your report submitted successfully review in progress",
+    "Team building event planned for next month details to follow",
 ]
 
-# Repeat extra data 10 times
-phishing_texts = phishing_texts * 10
-legitimate_texts = legitimate_texts * 10
+# Repeat extra data 15 times (increased from 10)
+phishing_texts = phishing_texts * 15
+legitimate_texts = legitimate_texts * 15
 
 # Create DataFrame for extra data
 extra_data = pd.DataFrame({
