@@ -339,6 +339,40 @@ def predict_email():
     
     result = "Spam/Phishing" if prediction == 1 else "Legitimate"
     
+    # ===== RULE-BASED OVERRIDE FOR NON-ENGLISH PHISHING =====
+    # Check for strong phishing patterns in translated text (especially for non-English)
+    text_check = translated_text.lower()
+    strong_phishing_patterns = [
+        # Account suspension/blocking patterns
+        ('suspend' in text_check or 'block' in text_check or 'deactivat' in text_check) and 
+        ('card' in text_check or 'account' in text_check or 'atm' in text_check),
+        
+        # Verification urgency patterns
+        ('verif' in text_check or 'confirm' in text_check or 'update' in text_check) and
+        ('urgent' in text_check or 'immediate' in text_check or '24' in text_check or 'expire' in text_check),
+        
+        # OTP/security credential sharing
+        ('otp' in text_check or 'password' in text_check or 'pin' in text_check or 'cvv' in text_check) and
+        ('share' in text_check or 'provide' in text_check or 'send' in text_check or 'enter' in text_check),
+        
+        # Prize/lottery with payment
+        ('won' in text_check or 'prize' in text_check or 'lottery' in text_check or 'reward' in text_check) and
+        ('fee' in text_check or 'pay' in text_check or 'deposit' in text_check or 'transfer' in text_check),
+        
+        # Banking + urgency + link/action
+        ('bank' in text_check or 'credit' in text_check or 'debit' in text_check) and
+        ('click' in text_check or 'link' in text_check or 'call' in text_check or 'contact' in text_check) and
+        ('urgent' in text_check or 'immediate' in text_check or 'now' in text_check),
+    ]
+    
+    if any(strong_phishing_patterns):
+        result = "Spam/Phishing"
+        # Boost confidence to at least 85% for rule-based detection
+        confidence = max(85, confidence)
+        print(f"[RULE-BASED OVERRIDE] Strong phishing pattern detected, forced Spam/Phishing classification")
+    
+    print(f"[FINAL] Result: {result}, Confidence: {confidence}%")
+    
     # Analyze threat indicators from translated text
     indicators = analyze_threat_indicators(translated_text) if result == "Spam/Phishing" else []
 
@@ -389,6 +423,40 @@ def predict_scam():
         confidence = int(proba[0] * 100)  # Probability of legitimate class
     
     result = "Spam/Phishing" if prediction == 1 else "Legitimate"
+    
+    # ===== RULE-BASED OVERRIDE FOR NON-ENGLISH PHISHING =====
+    # Check for strong phishing patterns in translated text (especially for non-English)
+    text_check = translated_text.lower()
+    strong_phishing_patterns = [
+        # Account suspension/blocking patterns
+        ('suspend' in text_check or 'block' in text_check or 'deactivat' in text_check) and 
+        ('card' in text_check or 'account' in text_check or 'atm' in text_check),
+        
+        # Verification urgency patterns
+        ('verif' in text_check or 'confirm' in text_check or 'update' in text_check) and
+        ('urgent' in text_check or 'immediate' in text_check or '24' in text_check or 'expire' in text_check),
+        
+        # OTP/security credential sharing
+        ('otp' in text_check or 'password' in text_check or 'pin' in text_check or 'cvv' in text_check) and
+        ('share' in text_check or 'provide' in text_check or 'send' in text_check or 'enter' in text_check),
+        
+        # Prize/lottery with payment
+        ('won' in text_check or 'prize' in text_check or 'lottery' in text_check or 'reward' in text_check) and
+        ('fee' in text_check or 'pay' in text_check or 'deposit' in text_check or 'transfer' in text_check),
+        
+        # Banking + urgency + link/action
+        ('bank' in text_check or 'credit' in text_check or 'debit' in text_check) and
+        ('click' in text_check or 'link' in text_check or 'call' in text_check or 'contact' in text_check) and
+        ('urgent' in text_check or 'immediate' in text_check or 'now' in text_check),
+    ]
+    
+    if any(strong_phishing_patterns):
+        result = "Spam/Phishing"
+        # Boost confidence to at least 85% for rule-based detection
+        confidence = max(85, confidence)
+        print(f"[RULE-BASED OVERRIDE] Strong phishing pattern detected, forced Spam/Phishing classification")
+    
+    print(f"[FINAL] Result: {result}, Confidence: {confidence}%")
     
     # Analyze threat indicators from translated text
     indicators = analyze_threat_indicators(translated_text) if result == "Spam/Phishing" else []
