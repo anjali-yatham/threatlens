@@ -307,6 +307,13 @@ def predict_email():
     data = request.get_json()
     text = data.get("text", "")
     
+    # ===== TEMPORARY DEBUG LOGGING =====
+    print(f"\n{'='*60}")
+    print(f"[EMAIL DEBUG] Text length: {len(text)} characters")
+    print(f"[EMAIL DEBUG] Model: text_model (Logistic Regression)")
+    print(f"{'='*60}")
+    # ===================================
+    
     # Detect language and translate if needed
     translated_text, detected_lang, was_translated = detect_and_translate(text)
     
@@ -328,6 +335,11 @@ def predict_email():
     transformed = text_vectorizer.transform([text_clean])
     prediction = text_model.predict(transformed)[0]
     proba = text_model.predict_proba(transformed)[0]
+    
+    # ===== TEMPORARY DEBUG LOGGING =====
+    print(f"[EMAIL DEBUG] Raw model prediction class: {prediction}")
+    print(f"[EMAIL DEBUG] Raw probabilities: [Legit: {proba[0]:.4f}, Spam: {proba[1]:.4f}]")
+    # ===================================
     
     print(f"[EMAIL PREDICTION] Class: {prediction}, Probabilities: {proba}")
     
@@ -373,6 +385,11 @@ def predict_email():
     
     print(f"[FINAL] Result: {result}, Confidence: {confidence}%")
     
+    # ===== TEMPORARY DEBUG LOGGING =====
+    print(f"[EMAIL DEBUG] Final API response - Result: {result}, Confidence: {confidence}%")
+    print(f"{'='*60}\n")
+    # ===================================
+    
     # Analyze threat indicators from translated text
     indicators = analyze_threat_indicators(translated_text) if result == "Spam/Phishing" else []
 
@@ -392,6 +409,13 @@ def predict_scam():
         return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json()
     text = data.get("text", "")
+    
+    # ===== TEMPORARY DEBUG LOGGING =====
+    print(f"\n{'='*60}")
+    print(f"[SCAM DEBUG] Text length: {len(text)} characters")
+    print(f"[SCAM DEBUG] Model: text_model (Logistic Regression - same as email)")
+    print(f"{'='*60}")
+    # ===================================
     
     # Detect language and translate if needed
     translated_text, detected_lang, was_translated = detect_and_translate(text)
@@ -413,6 +437,11 @@ def predict_scam():
     transformed = text_vectorizer.transform([text_clean])
     prediction = text_model.predict(transformed)[0]
     proba = text_model.predict_proba(transformed)[0]
+    
+    # ===== TEMPORARY DEBUG LOGGING =====
+    print(f"[SCAM DEBUG] Raw model prediction class: {prediction}")
+    print(f"[SCAM DEBUG] Raw probabilities: [Legit: {proba[0]:.4f}, Spam: {proba[1]:.4f}]")
+    # ===================================
     
     print(f"[PREDICTION] Class: {prediction}, Probabilities: {proba}")
     
@@ -457,6 +486,11 @@ def predict_scam():
         print(f"[RULE-BASED OVERRIDE] Strong phishing pattern detected, forced Spam/Phishing classification")
     
     print(f"[FINAL] Result: {result}, Confidence: {confidence}%")
+    
+    # ===== TEMPORARY DEBUG LOGGING =====
+    print(f"[SCAM DEBUG] Final API response - Result: {result}, Confidence: {confidence}%")
+    print(f"{'='*60}\n")
+    # ===================================
     
     # Analyze threat indicators from translated text
     indicators = analyze_threat_indicators(translated_text) if result == "Spam/Phishing" else []
@@ -535,6 +569,13 @@ def predict_job():
     data = request.get_json()
     text = data.get("text", "")
     
+    # ===== TEMPORARY DEBUG LOGGING =====
+    print(f"\n{'='*60}")
+    print(f"[JOB DEBUG] Text length: {len(text)} characters")
+    print(f"[JOB DEBUG] Model: job_model (XGBoost)")
+    print(f"{'='*60}")
+    # ===================================
+    
     # Detect language and translate if needed
     translated_text, detected_lang, was_translated = detect_and_translate(text)
     
@@ -546,6 +587,12 @@ def predict_job():
     # Predict using optimal threshold
     proba = job_model.predict_proba(combined)[0]
     prediction = 1 if proba[1] >= job_threshold else 0
+    
+    # ===== TEMPORARY DEBUG LOGGING =====
+    print(f"[JOB DEBUG] Raw model prediction class: {prediction}")
+    print(f"[JOB DEBUG] Raw probabilities: [Legit: {proba[0]:.4f}, Fake: {proba[1]:.4f}]")
+    print(f"[JOB DEBUG] Threshold used: {job_threshold:.4f}")
+    # ===================================
     
     # Debug logging
     print(f"\n[JOB PREDICTION DEBUG]")
@@ -624,6 +671,11 @@ def predict_job():
     
     print(f"[FINAL RESULT] {result}, Confidence: {confidence}%")
     print(f"[END DEBUG]\n")
+    
+    # ===== TEMPORARY DEBUG LOGGING =====
+    print(f"[JOB DEBUG] Final API response - Result: {result}, Confidence: {confidence}%")
+    print(f"{'='*60}\n")
+    # ===================================
     
     # Analyze threat indicators from translated text
     indicators = analyze_threat_indicators(translated_text) if result == "Fake" else []
