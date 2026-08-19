@@ -9,20 +9,24 @@ load_dotenv()
 app = Flask(__name__)
 
 # Configure CORS for both local development and production
+# IMPORTANT: Wildcard origins don't work with credentials=True
 allowed_origins = [
     "http://localhost:5173",
     "http://localhost:5174", 
     "http://localhost:5175",
     "http://127.0.0.1:5173",
-    # Production Vercel frontend URLs
+    # Production Vercel frontend URL
     "https://threatlens-g3sgal404-divyanjalis-projects.vercel.app",
-    "https://threatlens.vercel.app",  # If you set up custom domain
-    "https://*.vercel.app",  # Allow all Vercel preview deployments
 ]
 
-CORS(app, origins=allowed_origins, supports_credentials=True, 
-     allow_headers=["Content-Type", "Authorization"],
-     methods=["GET", "POST", "DELETE", "OPTIONS"])
+CORS(
+    app,
+    resources={r"/api/*": {"origins": allowed_origins}},
+    supports_credentials=True,
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "DELETE", "OPTIONS"],
+    expose_headers=["Content-Type", "Authorization"]
+)
 
 # MongoDB connection
 client = MongoClient(os.getenv("MONGO_URI"))
