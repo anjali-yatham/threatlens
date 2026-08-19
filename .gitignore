@@ -1,6 +1,9 @@
 # Environment variables
 backend/.env
 .env
+*.env
+.env.local
+.env.production
 
 # Python cache
 __pycache__/
@@ -13,6 +16,13 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+*.log
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
 
 # Node modules
 node_modules/
@@ -21,7 +31,20 @@ frontend/node_modules/
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Deployment
+*.sqlite
+*.db
