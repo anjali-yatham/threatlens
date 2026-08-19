@@ -12,7 +12,7 @@ export function AuthProvider({ children }) {
       const token = localStorage.getItem('token')
       if (token) {
         try {
-          const res = await axios.get('http://localhost:5000/api/auth/verify', {
+          const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/auth/verify`, {
             headers: { Authorization: `Bearer ${token}` }
           })
           setUser(res.data)
@@ -27,14 +27,14 @@ export function AuthProvider({ children }) {
   }, [])
 
   const login = async (email, password) => {
-    const res = await axios.post('http://localhost:5000/api/auth/login', { email, password })
+    const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/login`, { email, password })
     localStorage.setItem('token', res.data.token)
     setUser({ name: res.data.name, email: res.data.email })
     return res.data
   }
 
   const signup = async (name, email, password) => {
-    const res = await axios.post('http://localhost:5000/api/auth/signup', { name, email, password })
+    const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/signup`, { name, email, password })
     localStorage.setItem('token', res.data.token)
     setUser({ name: res.data.name, email: res.data.email })
     return res.data

@@ -30,7 +30,7 @@ export default function Dashboard() {
   const fetchHistory = () => {
     const token = localStorage.getItem('token')
     if (!token) return
-    fetch('http://localhost:5000/api/history', {
+    fetch(`${import.meta.env.VITE_API_URL}/api/history`, {
       headers: { 'Authorization': 'Bearer ' + token }
     })
     .then(r => r.json())
@@ -46,7 +46,7 @@ export default function Dashboard() {
     const token = localStorage.getItem('token')
     if (!token) return
     
-    fetch('http://localhost:5000/api/history', {
+    fetch(`${import.meta.env.VITE_API_URL}/api/history`, {
       method: 'DELETE',
       headers: { 'Authorization': 'Bearer ' + token }
     })
@@ -61,10 +61,10 @@ export default function Dashboard() {
   const analyzeContent = (type) => {
     const inputs = { url: urlInput, email: emailInput, scam: scamInput, job: jobInput }
     const endpoints = {
-      url: 'http://localhost:5000/api/predict-url',
-      email: 'http://localhost:5000/api/predict-email',
-      scam: 'http://localhost:5000/api/predict-scam',
-      job: 'http://localhost:5000/api/predict-job'
+      url: `${import.meta.env.VITE_API_URL}/api/predict-url`,
+      email: `${import.meta.env.VITE_API_URL}/api/predict-email`,
+      scam: `${import.meta.env.VITE_API_URL}/api/predict-scam`,
+      job: `${import.meta.env.VITE_API_URL}/api/predict-job`
     }
     const value = inputs[type]
     if (!value || !value.trim()) return
