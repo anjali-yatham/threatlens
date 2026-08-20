@@ -77,18 +77,41 @@ export default function Dashboard() {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify(body)
     })
-    .then(r => r.json())
-    .then(data => { setResult(data); setTimeout(() => fetchHistory(), 500) })
-    .catch(() => setResult({ result: 'Error', confidence: 0 }))
+    .then(r => {
+      if (!r.ok) {
+        // HTTP error status (4xx, 5xx)
+        return r.json().then(errData => {
+          throw new Error(errData.error || errData.message || `HTTP ${r.status}: ${r.statusText}`)
+        }).catch(() => {
+          throw new Error(`HTTP ${r.status}: ${r.statusText}`)
+        })
+      }
+      return r.json()
+    })
+    .then(data => {
+      // Successful response with valid result
+      if (data.result) {
+        setResult(data)
+        setTimeout(() => fetchHistory(), 500)
+      } else {
+        // Response doesn't have expected structure
+        setResult({ error: true, message: 'Invalid response from server' })
+      }
+    })
+    .catch(err => {
+      // Network error or server error
+      console.error('Analysis error:', err)
+      setResult({ error: true, message: err.message || 'Analysis failed - server error' })
+    })
     .finally(() => setAnalyzing(false))
   }
 
-  const isThreat = result && ['Phishing', 'Spam/Phishing', 'Fake'].includes(result.result)
+  const isThreat = result && !result.error && ['Phishing', 'Spam/Phishing', 'Fake'].includes(result.result)
 
   // FIXED: Calculate risk score properly
   // For threats: high model confidence = high risk
   // For safe: low model confidence = high risk (uncertainty is risky!)
-  const riskScore = result
+  const riskScore = result && !result.error
     ? isThreat
       ? result.confidence  // Threat: confidence in threat = risk score
       : Math.max(1, 100 - result.confidence)  // Safe: low confidence in safety = high risk
@@ -251,7 +274,32 @@ export default function Dashboard() {
               {analyzing && (
                 <div className="res-loading"><div className="spinner" /><span>Analyzing with AI...</span></div>
               )}
-              {result && !analyzing && (
+              {result && !analyzing && result.error && (
+                // ERROR STATE - API/Server Error
+                <div style={{
+                  background: 'rgba(255,170,0,0.07)',
+                  border: '1px solid rgba(255,170,0,0.35)',
+                  borderRadius: '18px',
+                  padding: '28px',
+                  boxShadow: '0 0 30px rgba(255,170,0,0.1)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+                    <span style={{ fontSize: '2rem' }}>⚠️</span>
+                    <div>
+                      <div style={{ fontFamily: 'Orbitron,monospace', fontSize: '1.3rem', fontWeight: 700, color: '#ffaa00' }}>
+                        ANALYSIS FAILED
+                      </div>
+                      <div style={{ color: 'rgba(224,230,240,0.6)', fontSize: '0.9rem', marginTop: '4px' }}>
+                        Backend service error — please try again
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ color: 'rgba(224,230,240,0.7)', fontSize: '0.9rem', padding: '12px', background: 'rgba(255,170,0,0.05)', borderRadius: '8px', border: '1px solid rgba(255,170,0,0.2)' }}>
+                    <strong>Error:</strong> {result.message || 'Unknown error occurred'}
+                  </div>
+                </div>
+              )}
+              {result && !analyzing && !result.error && (
                 <div style={{
                   background: !isSafe ? 'rgba(255,68,68,0.07)' : 'rgba(0,255,136,0.07)',
                   border: !isSafe ? '1px solid rgba(255,68,68,0.35)' : '1px solid rgba(0,255,136,0.35)',

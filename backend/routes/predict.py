@@ -24,18 +24,71 @@ predict_bp = Blueprint("predict", __name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, '..', 'models')
 
-url_model = joblib.load(os.path.join(MODELS_DIR, 'url_model.pkl'))
-url_columns = joblib.load(os.path.join(MODELS_DIR, 'url_columns.pkl'))
-text_model = joblib.load(os.path.join(MODELS_DIR, 'text_model.pkl'))
-text_vectorizer = joblib.load(os.path.join(MODELS_DIR, 'text_vectorizer.pkl'))
-job_model = joblib.load(os.path.join(MODELS_DIR, 'job_model.pkl'))
-job_vectorizer = joblib.load(os.path.join(MODELS_DIR, 'job_vectorizer.pkl'))
+# ===== PRODUCTION DIAGNOSTIC LOGGING =====
+print(f"\n{'='*70}")
+print(f"[MODEL INITIALIZATION] Starting model loading...")
+print(f"[MODEL INITIALIZATION] BASE_DIR: {BASE_DIR}")
+print(f"[MODEL INITIALIZATION] MODELS_DIR: {MODELS_DIR}")
+print(f"[MODEL INITIALIZATION] MODELS_DIR absolute: {os.path.abspath(MODELS_DIR)}")
+print(f"{'='*70}\n")
 
-# Load optimal threshold for job model (default to 0.5 if not found)
+# Load models with detailed logging
 try:
-    job_threshold = joblib.load(os.path.join(MODELS_DIR, 'job_threshold.pkl'))
-except:
-    job_threshold = 0.5  # Default threshold
+    print(f"[LOADING] url_model.pkl...")
+    url_model = joblib.load(os.path.join(MODELS_DIR, 'url_model.pkl'))
+    print(f"[SUCCESS] url_model loaded: {type(url_model)}")
+    
+    print(f"[LOADING] url_columns.pkl...")
+    url_columns = joblib.load(os.path.join(MODELS_DIR, 'url_columns.pkl'))
+    print(f"[SUCCESS] url_columns loaded: {len(url_columns)} columns")
+    
+    print(f"[LOADING] text_model.pkl...")
+    text_model = joblib.load(os.path.join(MODELS_DIR, 'text_model.pkl'))
+    print(f"[SUCCESS] text_model loaded: {type(text_model)}")
+    
+    print(f"[LOADING] text_vectorizer.pkl...")
+    text_vectorizer_path = os.path.join(MODELS_DIR, 'text_vectorizer.pkl')
+    print(f"[DEBUG] text_vectorizer path: {text_vectorizer_path}")
+    print(f"[DEBUG] File exists: {os.path.exists(text_vectorizer_path)}")
+    if os.path.exists(text_vectorizer_path):
+        print(f"[DEBUG] File size: {os.path.getsize(text_vectorizer_path)} bytes")
+    text_vectorizer = joblib.load(text_vectorizer_path)
+    print(f"[SUCCESS] text_vectorizer loaded: {type(text_vectorizer)}")
+    print(f"[VERIFY] text_vectorizer.idf_ exists: {hasattr(text_vectorizer, 'idf_')}")
+    print(f"[VERIFY] text_vectorizer.vocabulary_ exists: {hasattr(text_vectorizer, 'vocabulary_')}")
+    if hasattr(text_vectorizer, 'vocabulary_'):
+        print(f"[VERIFY] text_vectorizer vocab size: {len(text_vectorizer.vocabulary_)}")
+    
+    print(f"[LOADING] job_model.pkl...")
+    job_model = joblib.load(os.path.join(MODELS_DIR, 'job_model.pkl'))
+    print(f"[SUCCESS] job_model loaded: {type(job_model)}")
+    
+    print(f"[LOADING] job_vectorizer.pkl...")
+    job_vectorizer = joblib.load(os.path.join(MODELS_DIR, 'job_vectorizer.pkl'))
+    print(f"[SUCCESS] job_vectorizer loaded: {type(job_vectorizer)}")
+    print(f"[VERIFY] job_vectorizer.idf_ exists: {hasattr(job_vectorizer, 'idf_')}")
+    
+    # Load optimal threshold for job model (default to 0.5 if not found)
+    try:
+        job_threshold = joblib.load(os.path.join(MODELS_DIR, 'job_threshold.pkl'))
+        print(f"[SUCCESS] job_threshold loaded: {job_threshold}")
+    except Exception as e:
+        job_threshold = 0.5
+        print(f"[WARNING] job_threshold not found, using default: {job_threshold}")
+    
+    print(f"\n{'='*70}")
+    print(f"[MODEL INITIALIZATION] All models loaded successfully!")
+    print(f"{'='*70}\n")
+    
+except Exception as e:
+    print(f"\n{'='*70}")
+    print(f"[CRITICAL ERROR] Model loading failed!")
+    print(f"[ERROR TYPE] {type(e).__name__}")
+    print(f"[ERROR MESSAGE] {str(e)}")
+    import traceback
+    print(f"[TRACEBACK] {traceback.format_exc()}")
+    print(f"{'='*70}\n")
+    raise
 
 def save_scan(user_email, scan_type, input_text, result, confidence):
     scans.insert_one({
@@ -302,208 +355,232 @@ def predict_url():
 
 @predict_bp.route("/predict-email", methods=["POST"])
 def predict_email():
-    if not check_auth(request):
-        return jsonify({"error": "Unauthorized"}), 401
-    data = request.get_json()
-    text = data.get("text", "")
-    
-    # ===== TEMPORARY DEBUG LOGGING =====
-    print(f"\n{'='*60}")
-    print(f"[EMAIL DEBUG] Text length: {len(text)} characters")
-    print(f"[EMAIL DEBUG] Model: text_model (Logistic Regression)")
-    print(f"{'='*60}")
-    # ===================================
-    
-    # Detect language and translate if needed
-    translated_text, detected_lang, was_translated = detect_and_translate(text)
-    
-    # Debug logging
-    if was_translated:
-        print(f"[EMAIL TRANSLATION] Detected language: {detected_lang}")
-        print(f"[EMAIL TRANSLATION] Original: {text[:100]}")
-        print(f"[EMAIL TRANSLATION] Translated: {translated_text[:100]}")
-    
-    # CRITICAL FIX: Preprocess text to match training preprocessing
-    import string
-    text_clean = translated_text.lower()
-    text_clean = text_clean.translate(str.maketrans('', '', string.punctuation))
-    # Note: Stopword removal is NOT needed here as TF-IDF will handle it
-    
-    print(f"[EMAIL PREPROCESSED] {text_clean[:100]}")
-    
-    # Use preprocessed text for prediction
-    transformed = text_vectorizer.transform([text_clean])
-    prediction = text_model.predict(transformed)[0]
-    proba = text_model.predict_proba(transformed)[0]
-    
-    # ===== TEMPORARY DEBUG LOGGING =====
-    print(f"[EMAIL DEBUG] Raw model prediction class: {prediction}")
-    print(f"[EMAIL DEBUG] Raw probabilities: [Legit: {proba[0]:.4f}, Spam: {proba[1]:.4f}]")
-    # ===================================
-    
-    print(f"[EMAIL PREDICTION] Class: {prediction}, Probabilities: {proba}")
-    
-    # FIXED: Confidence should be the probability of the PREDICTED class
-    if prediction == 1:  # Spam/Phishing
-        confidence = int(proba[1] * 100)  # Probability of spam class
-    else:  # Legitimate
-        confidence = int(proba[0] * 100)  # Probability of legitimate class
-    
-    result = "Spam/Phishing" if prediction == 1 else "Legitimate"
-    
-    # ===== RULE-BASED OVERRIDE FOR NON-ENGLISH PHISHING =====
-    # Check for strong phishing patterns in translated text (especially for non-English)
-    text_check = translated_text.lower()
-    strong_phishing_patterns = [
-        # Account suspension/blocking patterns
-        ('suspend' in text_check or 'block' in text_check or 'deactivat' in text_check) and 
-        ('card' in text_check or 'account' in text_check or 'atm' in text_check),
+    try:
+        if not check_auth(request):
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json()
+        text = data.get("text", "")
         
-        # Verification urgency patterns
-        ('verif' in text_check or 'confirm' in text_check or 'update' in text_check) and
-        ('urgent' in text_check or 'immediate' in text_check or '24' in text_check or 'expire' in text_check),
+        # ===== TEMPORARY DEBUG LOGGING =====
+        print(f"\n{'='*60}")
+        print(f"[EMAIL DEBUG] Text length: {len(text)} characters")
+        print(f"[EMAIL DEBUG] Model: text_model (Logistic Regression)")
+        print(f"{'='*60}")
+        # ===================================
         
-        # OTP/security credential sharing
-        ('otp' in text_check or 'password' in text_check or 'pin' in text_check or 'cvv' in text_check) and
-        ('share' in text_check or 'provide' in text_check or 'send' in text_check or 'enter' in text_check),
+        # Detect language and translate if needed
+        translated_text, detected_lang, was_translated = detect_and_translate(text)
         
-        # Prize/lottery with payment
-        ('won' in text_check or 'prize' in text_check or 'lottery' in text_check or 'reward' in text_check) and
-        ('fee' in text_check or 'pay' in text_check or 'deposit' in text_check or 'transfer' in text_check),
+        # Debug logging
+        if was_translated:
+            print(f"[EMAIL TRANSLATION] Detected language: {detected_lang}")
+            print(f"[EMAIL TRANSLATION] Original: {text[:100]}")
+            print(f"[EMAIL TRANSLATION] Translated: {translated_text[:100]}")
         
-        # Banking + urgency + link/action
-        ('bank' in text_check or 'credit' in text_check or 'debit' in text_check) and
-        ('click' in text_check or 'link' in text_check or 'call' in text_check or 'contact' in text_check) and
-        ('urgent' in text_check or 'immediate' in text_check or 'now' in text_check),
-    ]
-    
-    if any(strong_phishing_patterns):
-        result = "Spam/Phishing"
-        # Boost confidence to at least 85% for rule-based detection
-        confidence = max(85, confidence)
-        print(f"[RULE-BASED OVERRIDE] Strong phishing pattern detected, forced Spam/Phishing classification")
-    
-    print(f"[FINAL] Result: {result}, Confidence: {confidence}%")
-    
-    # ===== TEMPORARY DEBUG LOGGING =====
-    print(f"[EMAIL DEBUG] Final API response - Result: {result}, Confidence: {confidence}%")
-    print(f"{'='*60}\n")
-    # ===================================
-    
-    # Analyze threat indicators from translated text
-    indicators = analyze_threat_indicators(translated_text) if result == "Spam/Phishing" else []
+        # CRITICAL FIX: Preprocess text to match training preprocessing
+        import string
+        text_clean = translated_text.lower()
+        text_clean = text_clean.translate(str.maketrans('', '', string.punctuation))
+        # Note: Stopword removal is NOT needed here as TF-IDF will handle it
+        
+        print(f"[EMAIL PREPROCESSED] {text_clean[:100]}")
+        
+        # Use preprocessed text for prediction
+        transformed = text_vectorizer.transform([text_clean])
+        prediction = text_model.predict(transformed)[0]
+        proba = text_model.predict_proba(transformed)[0]
+        
+        # ===== TEMPORARY DEBUG LOGGING =====
+        print(f"[EMAIL DEBUG] Raw model prediction class: {prediction}")
+        print(f"[EMAIL DEBUG] Raw probabilities: [Legit: {proba[0]:.4f}, Spam: {proba[1]:.4f}]")
+        # ===================================
+        
+        print(f"[EMAIL PREDICTION] Class: {prediction}, Probabilities: {proba}")
+        
+        # FIXED: Confidence should be the probability of the PREDICTED class
+        if prediction == 1:  # Spam/Phishing
+            confidence = int(proba[1] * 100)  # Probability of spam class
+        else:  # Legitimate
+            confidence = int(proba[0] * 100)  # Probability of legitimate class
+        
+        result = "Spam/Phishing" if prediction == 1 else "Legitimate"
+        
+        # ===== RULE-BASED OVERRIDE FOR NON-ENGLISH PHISHING =====
+        # Check for strong phishing patterns in translated text (especially for non-English)
+        text_check = translated_text.lower()
+        strong_phishing_patterns = [
+            # Account suspension/blocking patterns
+            ('suspend' in text_check or 'block' in text_check or 'deactivat' in text_check) and 
+            ('card' in text_check or 'account' in text_check or 'atm' in text_check),
+            
+            # Verification urgency patterns
+            ('verif' in text_check or 'confirm' in text_check or 'update' in text_check) and
+            ('urgent' in text_check or 'immediate' in text_check or '24' in text_check or 'expire' in text_check),
+            
+            # OTP/security credential sharing
+            ('otp' in text_check or 'password' in text_check or 'pin' in text_check or 'cvv' in text_check) and
+            ('share' in text_check or 'provide' in text_check or 'send' in text_check or 'enter' in text_check),
+            
+            # Prize/lottery with payment
+            ('won' in text_check or 'prize' in text_check or 'lottery' in text_check or 'reward' in text_check) and
+            ('fee' in text_check or 'pay' in text_check or 'deposit' in text_check or 'transfer' in text_check),
+            
+            # Banking + urgency + link/action
+            ('bank' in text_check or 'credit' in text_check or 'debit' in text_check) and
+            ('click' in text_check or 'link' in text_check or 'call' in text_check or 'contact' in text_check) and
+            ('urgent' in text_check or 'immediate' in text_check or 'now' in text_check),
+        ]
+        
+        if any(strong_phishing_patterns):
+            result = "Spam/Phishing"
+            # Boost confidence to at least 85% for rule-based detection
+            confidence = max(85, confidence)
+            print(f"[RULE-BASED OVERRIDE] Strong phishing pattern detected, forced Spam/Phishing classification")
+        
+        print(f"[FINAL] Result: {result}, Confidence: {confidence}%")
+        
+        # ===== TEMPORARY DEBUG LOGGING =====
+        print(f"[EMAIL DEBUG] Final API response - Result: {result}, Confidence: {confidence}%")
+        print(f"{'='*60}\n")
+        # ===================================
+        
+        # Analyze threat indicators from translated text
+        indicators = analyze_threat_indicators(translated_text) if result == "Spam/Phishing" else []
 
-    email = get_user_email(request)
-    if email:
-        save_scan(email, "Email", text, result, confidence)
+        email = get_user_email(request)
+        if email:
+            save_scan(email, "Email", text, result, confidence)
 
-    return jsonify({
-        "result": result, 
-        "confidence": confidence,
-        "indicators": indicators
-    })
+        return jsonify({
+            "result": result, 
+            "confidence": confidence,
+            "indicators": indicators
+        })
+    
+    except Exception as e:
+        # Log full exception for production debugging
+        import traceback
+        print(f"\n{'='*60}")
+        print(f"[EMAIL PREDICTION ERROR]")
+        print(f"[ERROR TYPE] {type(e).__name__}")
+        print(f"[ERROR MESSAGE] {str(e)}")
+        print(f"[TRACEBACK] {traceback.format_exc()}")
+        print(f"{'='*60}\n")
+        return jsonify({"error": "Analysis failed", "message": str(e)}), 500
 
 @predict_bp.route("/predict-scam", methods=["POST"])
 def predict_scam():
-    if not check_auth(request):
-        return jsonify({"error": "Unauthorized"}), 401
-    data = request.get_json()
-    text = data.get("text", "")
-    
-    # ===== TEMPORARY DEBUG LOGGING =====
-    print(f"\n{'='*60}")
-    print(f"[SCAM DEBUG] Text length: {len(text)} characters")
-    print(f"[SCAM DEBUG] Model: text_model (Logistic Regression - same as email)")
-    print(f"{'='*60}")
-    # ===================================
-    
-    # Detect language and translate if needed
-    translated_text, detected_lang, was_translated = detect_and_translate(text)
-    
-    # Debug logging
-    if was_translated:
-        print(f"[TRANSLATION] Detected language: {detected_lang}")
-        print(f"[TRANSLATION] Original: {text[:100]}")
-        print(f"[TRANSLATION] Translated: {translated_text[:100]}")
-    
-    # CRITICAL FIX: Preprocess text to match training preprocessing
-    import string
-    text_clean = translated_text.lower()
-    text_clean = text_clean.translate(str.maketrans('', '', string.punctuation))
-    
-    print(f"[PREPROCESSED] {text_clean[:100]}")
-    
-    # Use preprocessed text for prediction
-    transformed = text_vectorizer.transform([text_clean])
-    prediction = text_model.predict(transformed)[0]
-    proba = text_model.predict_proba(transformed)[0]
-    
-    # ===== TEMPORARY DEBUG LOGGING =====
-    print(f"[SCAM DEBUG] Raw model prediction class: {prediction}")
-    print(f"[SCAM DEBUG] Raw probabilities: [Legit: {proba[0]:.4f}, Spam: {proba[1]:.4f}]")
-    # ===================================
-    
-    print(f"[PREDICTION] Class: {prediction}, Probabilities: {proba}")
-    
-    # FIXED: Confidence should be the probability of the PREDICTED class
-    if prediction == 1:  # Spam/Phishing
-        confidence = int(proba[1] * 100)  # Probability of spam class
-    else:  # Legitimate
-        confidence = int(proba[0] * 100)  # Probability of legitimate class
-    
-    result = "Spam/Phishing" if prediction == 1 else "Legitimate"
-    
-    # ===== RULE-BASED OVERRIDE FOR NON-ENGLISH PHISHING =====
-    # Check for strong phishing patterns in translated text (especially for non-English)
-    text_check = translated_text.lower()
-    strong_phishing_patterns = [
-        # Account suspension/blocking patterns
-        ('suspend' in text_check or 'block' in text_check or 'deactivat' in text_check) and 
-        ('card' in text_check or 'account' in text_check or 'atm' in text_check),
+    try:
+        if not check_auth(request):
+            return jsonify({"error": "Unauthorized"}), 401
+        data = request.get_json()
+        text = data.get("text", "")
         
-        # Verification urgency patterns
-        ('verif' in text_check or 'confirm' in text_check or 'update' in text_check) and
-        ('urgent' in text_check or 'immediate' in text_check or '24' in text_check or 'expire' in text_check),
+        # ===== TEMPORARY DEBUG LOGGING =====
+        print(f"\n{'='*60}")
+        print(f"[SCAM DEBUG] Text length: {len(text)} characters")
+        print(f"[SCAM DEBUG] Model: text_model (Logistic Regression - same as email)")
+        print(f"{'='*60}")
+        # ===================================
         
-        # OTP/security credential sharing
-        ('otp' in text_check or 'password' in text_check or 'pin' in text_check or 'cvv' in text_check) and
-        ('share' in text_check or 'provide' in text_check or 'send' in text_check or 'enter' in text_check),
+        # Detect language and translate if needed
+        translated_text, detected_lang, was_translated = detect_and_translate(text)
         
-        # Prize/lottery with payment
-        ('won' in text_check or 'prize' in text_check or 'lottery' in text_check or 'reward' in text_check) and
-        ('fee' in text_check or 'pay' in text_check or 'deposit' in text_check or 'transfer' in text_check),
+        # Debug logging
+        if was_translated:
+            print(f"[TRANSLATION] Detected language: {detected_lang}")
+            print(f"[TRANSLATION] Original: {text[:100]}")
+            print(f"[TRANSLATION] Translated: {translated_text[:100]}")
         
-        # Banking + urgency + link/action
-        ('bank' in text_check or 'credit' in text_check or 'debit' in text_check) and
-        ('click' in text_check or 'link' in text_check or 'call' in text_check or 'contact' in text_check) and
-        ('urgent' in text_check or 'immediate' in text_check or 'now' in text_check),
-    ]
-    
-    if any(strong_phishing_patterns):
-        result = "Spam/Phishing"
-        # Boost confidence to at least 85% for rule-based detection
-        confidence = max(85, confidence)
-        print(f"[RULE-BASED OVERRIDE] Strong phishing pattern detected, forced Spam/Phishing classification")
-    
-    print(f"[FINAL] Result: {result}, Confidence: {confidence}%")
-    
-    # ===== TEMPORARY DEBUG LOGGING =====
-    print(f"[SCAM DEBUG] Final API response - Result: {result}, Confidence: {confidence}%")
-    print(f"{'='*60}\n")
-    # ===================================
-    
-    # Analyze threat indicators from translated text
-    indicators = analyze_threat_indicators(translated_text) if result == "Spam/Phishing" else []
+        # CRITICAL FIX: Preprocess text to match training preprocessing
+        import string
+        text_clean = translated_text.lower()
+        text_clean = text_clean.translate(str.maketrans('', '', string.punctuation))
+        
+        print(f"[PREPROCESSED] {text_clean[:100]}")
+        
+        # Use preprocessed text for prediction
+        transformed = text_vectorizer.transform([text_clean])
+        prediction = text_model.predict(transformed)[0]
+        proba = text_model.predict_proba(transformed)[0]
+        
+        # ===== TEMPORARY DEBUG LOGGING =====
+        print(f"[SCAM DEBUG] Raw model prediction class: {prediction}")
+        print(f"[SCAM DEBUG] Raw probabilities: [Legit: {proba[0]:.4f}, Spam: {proba[1]:.4f}]")
+        # ===================================
+        
+        print(f"[PREDICTION] Class: {prediction}, Probabilities: {proba}")
+        
+        # FIXED: Confidence should be the probability of the PREDICTED class
+        if prediction == 1:  # Spam/Phishing
+            confidence = int(proba[1] * 100)  # Probability of spam class
+        else:  # Legitimate
+            confidence = int(proba[0] * 100)  # Probability of legitimate class
+        
+        result = "Spam/Phishing" if prediction == 1 else "Legitimate"
+        
+        # ===== RULE-BASED OVERRIDE FOR NON-ENGLISH PHISHING =====
+        # Check for strong phishing patterns in translated text (especially for non-English)
+        text_check = translated_text.lower()
+        strong_phishing_patterns = [
+            # Account suspension/blocking patterns
+            ('suspend' in text_check or 'block' in text_check or 'deactivat' in text_check) and 
+            ('card' in text_check or 'account' in text_check or 'atm' in text_check),
+            
+            # Verification urgency patterns
+            ('verif' in text_check or 'confirm' in text_check or 'update' in text_check) and
+            ('urgent' in text_check or 'immediate' in text_check or '24' in text_check or 'expire' in text_check),
+            
+            # OTP/security credential sharing
+            ('otp' in text_check or 'password' in text_check or 'pin' in text_check or 'cvv' in text_check) and
+            ('share' in text_check or 'provide' in text_check or 'send' in text_check or 'enter' in text_check),
+            
+            # Prize/lottery with payment
+            ('won' in text_check or 'prize' in text_check or 'lottery' in text_check or 'reward' in text_check) and
+            ('fee' in text_check or 'pay' in text_check or 'deposit' in text_check or 'transfer' in text_check),
+            
+            # Banking + urgency + link/action
+            ('bank' in text_check or 'credit' in text_check or 'debit' in text_check) and
+            ('click' in text_check or 'link' in text_check or 'call' in text_check or 'contact' in text_check) and
+            ('urgent' in text_check or 'immediate' in text_check or 'now' in text_check),
+        ]
+        
+        if any(strong_phishing_patterns):
+            result = "Spam/Phishing"
+            # Boost confidence to at least 85% for rule-based detection
+            confidence = max(85, confidence)
+            print(f"[RULE-BASED OVERRIDE] Strong phishing pattern detected, forced Spam/Phishing classification")
+        
+        print(f"[FINAL] Result: {result}, Confidence: {confidence}%")
+        
+        # ===== TEMPORARY DEBUG LOGGING =====
+        print(f"[SCAM DEBUG] Final API response - Result: {result}, Confidence: {confidence}%")
+        print(f"{'='*60}\n")
+        # ===================================
+        
+        # Analyze threat indicators from translated text
+        indicators = analyze_threat_indicators(translated_text) if result == "Spam/Phishing" else []
 
-    email = get_user_email(request)
-    if email:
-        save_scan(email, "Scam", text, result, confidence)
+        email = get_user_email(request)
+        if email:
+            save_scan(email, "Scam", text, result, confidence)
 
-    return jsonify({
-        "result": result, 
-        "confidence": confidence,
-        "indicators": indicators
-    })
+        return jsonify({
+            "result": result, 
+            "confidence": confidence,
+            "indicators": indicators
+        })
+    
+    except Exception as e:
+        # Log full exception for production debugging
+        import traceback
+        print(f"\n{'='*60}")
+        print(f"[SCAM PREDICTION ERROR]")
+        print(f"[ERROR TYPE] {type(e).__name__}")
+        print(f"[ERROR MESSAGE] {str(e)}")
+        print(f"[TRACEBACK] {traceback.format_exc()}")
+        print(f"{'='*60}\n")
+        return jsonify({"error": "Analysis failed", "message": str(e)}), 500
 
 def extract_job_features(text_lower, original_text, vectorizer):
     """Extract enhanced features for job posting classification"""
