@@ -59,6 +59,14 @@ try:
     if hasattr(text_vectorizer, 'vocabulary_'):
         print(f"[VERIFY] text_vectorizer vocab size: {len(text_vectorizer.vocabulary_)}")
     
+    # CRITICAL VALIDATION: Ensure vectorizer is actually fitted
+    if not hasattr(text_vectorizer, 'idf_'):
+        raise RuntimeError(
+            "text_vectorizer is NOT fitted: missing idf_ attribute. "
+            "The vectorizer file is corrupted or was not properly trained. "
+            "Re-run train/train_text.py to regenerate text_vectorizer.pkl"
+        )
+    
     print(f"[LOADING] job_model.pkl...")
     job_model = joblib.load(os.path.join(MODELS_DIR, 'job_model.pkl'))
     print(f"[SUCCESS] job_model loaded: {type(job_model)}")
@@ -67,6 +75,14 @@ try:
     job_vectorizer = joblib.load(os.path.join(MODELS_DIR, 'job_vectorizer.pkl'))
     print(f"[SUCCESS] job_vectorizer loaded: {type(job_vectorizer)}")
     print(f"[VERIFY] job_vectorizer.idf_ exists: {hasattr(job_vectorizer, 'idf_')}")
+    
+    # CRITICAL VALIDATION: Ensure job_vectorizer is fitted
+    if not hasattr(job_vectorizer, 'idf_'):
+        raise RuntimeError(
+            "job_vectorizer is NOT fitted: missing idf_ attribute. "
+            "The vectorizer file is corrupted or was not properly trained. "
+            "Re-run train/train_jobs_improved.py to regenerate job_vectorizer.pkl"
+        )
     
     # Load optimal threshold for job model (default to 0.5 if not found)
     try:
