@@ -4,6 +4,9 @@
 
 ### AI-Powered Cyber Threat Detection Platform
 
+> **Live Demo:** [🚀 Try ThreatLens](https://threatlens-g3sgal404-divyanjalis-projects.vercel.app)  
+> **Backend API:** [⚙️ Render API](https://threatlens-4ye4.onrender.com)
+
 [![React](https://img.shields.io/badge/React-18.x-61DAFB?style=for-the-badge&logo=react&logoColor=white)](https://reactjs.org/)
 [![Flask](https://img.shields.io/badge/Flask-3.0-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-7.0-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
